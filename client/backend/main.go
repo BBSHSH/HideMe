@@ -103,7 +103,7 @@ func (p *TsnetProxy) Start() error {
 		Timeout: 3 * time.Second,
 	}
 
-	// 🔴 tsnetサーバー疎通監視
+	// tsnetサーバー疎通監視
 	go p.startServerHealthCheck()
 
 	mux := http.NewServeMux()

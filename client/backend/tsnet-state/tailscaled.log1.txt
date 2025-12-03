@@ -1,1 +1,0 @@
-{"logtail":{"client_time":"2026-01-19T03:14:26.2632392Z"},"text":"logger closing down\n"}

@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -15,6 +16,8 @@ import (
 type ChatServer struct {
 	tsnet       *tsnet.TsnetManager
 	db          *repository.Database
+	accountRepo *repository.AccountRepository
+	sessionRepo *repository.SessionRepository
 	userRepo    *repository.UserRepository
 	messageRepo *repository.MessageRepository
 	auditRepo   *repository.AuditRepository
@@ -23,16 +26,18 @@ type ChatServer struct {
 	upgrader    websocket.Upgrader
 }
 
-func NewChatServer(hostname, dbDSN string) (*ChatServer, error) {
+func NewChatServer(hostname, dbPath string) (*ChatServer, error) {
 	// データベース初期化
-	db, err := repository.NewDatabase(dbDSN)
+	db, err := repository.NewDatabase(dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("データベース初期化エラー: %v", err)
 	}
 
-	return &ChatServer{
+	server := &ChatServer{
 		tsnet:       tsnet.NewTsnetManager(),
 		db:          db,
+		accountRepo: repository.NewAccountRepository(db),
+		sessionRepo: repository.NewSessionRepository(db),
 		userRepo:    repository.NewUserRepository(db),
 		messageRepo: repository.NewMessageRepository(db),
 		auditRepo:   repository.NewAuditRepository(db),
@@ -44,7 +49,12 @@ func NewChatServer(hostname, dbDSN string) (*ChatServer, error) {
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
 		},
-	}, nil
+	}
+
+	// 期限切れセッションのクリーンアップを定期実行
+	go server.cleanupExpiredSessions()
+
+	return server, nil
 }
 
 func (s *ChatServer) Start(ctx context.Context, hostname string) error {
@@ -67,6 +77,14 @@ func (s *ChatServer) Start(ctx context.Context, hostname string) error {
 
 func (s *ChatServer) setupRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
+
+	// 認証系API
+	mux.HandleFunc("/api/auth/register", s.handleRegister)
+	mux.HandleFunc("/api/auth/login", s.handleLogin)
+	mux.HandleFunc("/api/auth/logout", s.handleLogout)
+	mux.HandleFunc("/api/auth/verify", s.handleVerify)
+
+	// 既存API
 	mux.HandleFunc("/api/users", s.handleGetUsers)
 	mux.HandleFunc("/api/messages", s.handleMessages)
 	mux.HandleFunc("/api/unread", s.handleUnreadCount)
@@ -74,7 +92,19 @@ func (s *ChatServer) setupRoutes() *http.ServeMux {
 	mux.HandleFunc("/api/gdpr/delete", s.handleGDPRDelete)
 	mux.HandleFunc("/ws", s.handleWebSocket)
 	mux.HandleFunc("/health", s.handleHealth)
+
 	return mux
+}
+
+func (s *ChatServer) cleanupExpiredSessions() {
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		if err := s.sessionRepo.CleanupExpired(); err != nil {
+			log.Printf("セッションクリーンアップエラー: %v", err)
+		}
+	}
 }
 
 func (s *ChatServer) Close() {
