@@ -1,8 +1,7 @@
-package main
+package app
 
 import (
 	"context"
-	_ "embed"
 	"fmt"
 	"net/http"
 	"os"
@@ -15,12 +14,12 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-type App struct {
+type VideoEditorApp struct {
 	ctx        context.Context
 	ffmpegPath string
 	videoPath  string
 	videoDir   string
-	videoPort  string // ポート番号を保持
+	videoPort  string
 }
 
 type VideoInfo struct {
@@ -37,64 +36,60 @@ type ExportOptions struct {
 	Volume     float64 `json:"volume"`
 }
 
-func NewApp() *App {
-	return &App{
+func NewVideoEditorApp() *VideoEditorApp {
+	return &VideoEditorApp{
 		videoPort: "8082",
 	}
 }
 
-// 初期実行
-func (a *App) startup(ctx context.Context) {
-	a.ctx = ctx
+func (v *VideoEditorApp) Startup(ctx context.Context) {
+	v.ctx = ctx
+	v.ffmpegPath = "embedded/ffmpeg.exe"
 
-	// FFmpegバイナリを一時ディレクトリに展開
-	a.ffmpegPath = "embedded/ffmpeg.exe"
-
-	// FFmpegのバージョンを確認
-	cmd := exec.Command(a.ffmpegPath, "-version")
+	// FFmpegのバージョン確認
+	cmd := exec.Command(v.ffmpegPath, "-version")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		fmt.Printf("FFmpeg version check failed: %v\n", err)
 	} else {
-		fmt.Printf("FFmpeg version: %s\n", string(output[:200]))
+		fmt.Printf("FFmpeg version: %s\n", string(output[:min(200, len(output))]))
 	}
 }
 
-func (a *App) shutdown(ctx context.Context) {
+func (v *VideoEditorApp) Shutdown(ctx context.Context) {
+	// クリーンアップ処理
 }
 
-// ファイル選択用ダイアログ表示
-func (a *App) SelectFile() (string, error) {
+// SelectFile opens file dialog
+func (v *VideoEditorApp) SelectFile() (string, error) {
 	options := runtime.OpenDialogOptions{
 		Title: "動画を選択",
 		Filters: []runtime.FileFilter{
 			{
-				DisplayName: "動画ファイル (*.mp4;*.mov;*.mkv;*.avi)",
+				DisplayName: "動画ファイル",
 				Pattern:     "*.mp4;*.mov;*.mkv;*.avi",
 			},
 		},
 	}
 
-	path, err := runtime.OpenFileDialog(a.ctx, options)
+	path, err := runtime.OpenFileDialog(v.ctx, options)
 	if err != nil || path == "" {
 		return "", err
 	}
 
-	a.videoPath = path
-	a.videoDir = filepath.Dir(path)
-
+	v.videoPath = path
+	v.videoDir = filepath.Dir(path)
 	fmt.Printf("Selected video: %s\n", path)
 	return path, nil
 }
 
-// GetVideoServerURL returns the video server URL for frontend
-func (a *App) GetVideoServerURL() string {
-	return fmt.Sprintf("http://localhost:%s", a.videoPort)
+// GetVideoServerURL returns the video server URL
+func (v *VideoEditorApp) GetVideoServerURL() string {
+	return fmt.Sprintf("http://localhost:%s", v.videoPort)
 }
 
-// ServeVideo serves video files with CORS support
-func (a *App) videoHandler(w http.ResponseWriter, r *http.Request) {
-	// CORS headers
+// VideoHandler serves video files
+func (v *VideoEditorApp) VideoHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
@@ -110,13 +105,11 @@ func (a *App) videoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// セキュリティチェック: ファイルが存在するか確認
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		http.Error(w, "file not found", 404)
 		return
 	}
 
-	// Content-Typeを動的に設定
 	ext := filepath.Ext(path)
 	contentType := "video/mp4"
 	switch ext {
@@ -135,10 +128,10 @@ func (a *App) videoHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetVideoInfo returns video metadata
-func (a *App) GetVideoInfo(inputPath string) (*VideoInfo, error) {
+func (v *VideoEditorApp) GetVideoInfo(inputPath string) (*VideoInfo, error) {
 	fmt.Printf("Getting video info for: %s\n", inputPath)
 
-	if _, err := os.Stat(a.ffmpegPath); err != nil {
+	if _, err := os.Stat(v.ffmpegPath); err != nil {
 		return nil, fmt.Errorf("ffmpeg not found: %v", err)
 	}
 
@@ -146,13 +139,8 @@ func (a *App) GetVideoInfo(inputPath string) (*VideoInfo, error) {
 		return nil, fmt.Errorf("video file not found: %v", err)
 	}
 
-	args := []string{
-		"-i", inputPath,
-		"-f", "null",
-		"-",
-	}
-
-	cmd := exec.Command(a.ffmpegPath, args...)
+	args := []string{"-i", inputPath, "-f", "null", "-"}
+	cmd := exec.Command(v.ffmpegPath, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		HideWindow:    true,
 		CreationFlags: 0x08000000,
@@ -208,13 +196,11 @@ func (a *App) GetVideoInfo(inputPath string) (*VideoInfo, error) {
 	return info, nil
 }
 
-// ExportVideo exports the video with specified options
-func (a *App) ExportVideo(options ExportOptions) error {
+// ExportVideo exports the video
+func (v *VideoEditorApp) ExportVideo(options ExportOptions) error {
 	fmt.Printf("Exporting video: %+v\n", options)
 
-	args := []string{
-		"-i", options.InputPath,
-	}
+	args := []string{"-i", options.InputPath}
 
 	if options.StartTime > 0 {
 		args = append(args, "-ss", fmt.Sprintf("%.2f", options.StartTime))
@@ -229,16 +215,9 @@ func (a *App) ExportVideo(options ExportOptions) error {
 		args = append(args, "-af", fmt.Sprintf("volume=%.2f", options.Volume))
 	}
 
-	// GPU encoding
-	args = append(args,
-		"-c:v", "h264_nvenc",
-		"-preset", "fast",
-		"-c:a", "aac",
-		"-b:a", "192k",
-		"-y", options.OutputPath,
-	)
+	args = append(args, "-c:v", "h264_nvenc", "-preset", "fast", "-c:a", "aac", "-b:a", "192k", "-y", options.OutputPath)
 
-	cmd := exec.Command(a.ffmpegPath, args...)
+	cmd := exec.Command(v.ffmpegPath, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		HideWindow:    true,
 		CreationFlags: 0x08000000,
@@ -249,7 +228,7 @@ func (a *App) ExportVideo(options ExportOptions) error {
 	if err != nil {
 		// CPU encoding fallback
 		args[len(args)-8] = "libx264"
-		cmd = exec.Command(a.ffmpegPath, args...)
+		cmd = exec.Command(v.ffmpegPath, args...)
 		cmd.SysProcAttr = &syscall.SysProcAttr{
 			HideWindow:    true,
 			CreationFlags: 0x08000000,
@@ -274,4 +253,11 @@ func parseTimeString(timeStr string) float64 {
 	minutes, _ := strconv.ParseFloat(parts[1], 64)
 	seconds, _ := strconv.ParseFloat(parts[2], 64)
 	return hours*3600 + minutes*60 + seconds
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

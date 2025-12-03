@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { GetVideoInfo, ExportVideo, SelectFile } from '../wailsjs/go/main/App';
+import { GetVideoInfo, ExportVideo, SelectFile } from '../wailsjs/go/app/VideoEditorApp';
 import Header from './components/Header';
-import './App.css';
+import './css/Editor.css';
 
 function App() {
   const [videoPath, setVideoPath] = useState('');
@@ -236,7 +236,7 @@ function App() {
 
   return (
     <div className="app">
-      <Header title="🎬 動画編集 - Video Editor" />
+      <Header/>
       <div className="main-container">
         <div className="left-panel">
             <div className="preview-container" onClick={!videoURL ? handleSelect : undefined}>
@@ -253,7 +253,7 @@ function App() {
                 />
             ) : (
                 <div className="preview-placeholder">
-                <p>ここをクリックして動画を選択してください</p>
+                <p>クリックして動画を選択</p>
                 </div>
             )}
             </div>
@@ -326,13 +326,13 @@ function App() {
               onClick={handlePlayPause}
               disabled={!videoInfo}
             >
-              {isPlaying ? '⏸️ 停止' : '▶️ 再生'}
+              {isPlaying ? '停止' : '再生'}
             </button>
             <button className="btn" onClick={resetRange} disabled={!videoInfo}>
-              🔄 範囲リセット
+              範囲リセット
             </button>
             <button className="btn btn-primary" onClick={handleSelect}>
-              📁 動画ファイルを開く
+              動画ファイルを開く
             </button>
           </div>
           
@@ -340,7 +340,7 @@ function App() {
 
         <div className="right-panel">
           <div className="settings-section">
-            <h3>🔊 音量調整</h3>
+            <h3>音量調整</h3>
             <div className="slider-group">
               <label>
                 音量: {Math.round(volume * 100)}%
@@ -363,7 +363,7 @@ function App() {
               onClick={handleExport}
               disabled={!videoInfo || isExporting}
             >
-              {isExporting ? '処理中...' : '💾 動画を保存'}
+              {isExporting ? '処理中...' : '動画を保存'}
             </button>
           </div>
 

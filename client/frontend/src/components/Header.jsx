@@ -6,7 +6,7 @@ export default function Header() {
   return (
     <header class="app-header-modern">
         <div class="logo-container">
-            <img class="logo" src="../logo/HideMe.png"></img>
+            <img class="logo" src="../src/assets/images/HideMe.png"></img>
             <div class="title">HideMe!</div>
         </div>
 

@@ -1,119 +1,62 @@
-package main
+package app
 
 import (
-	"context"
-	"fmt"
-	"io"
 	"log"
-	"net"
-	"sync"
+	"net/http"
 
 	"tailscale.com/tsnet"
 )
 
-type Server struct {
-	ts       *tsnet.Server
-	clients  map[string]net.Conn
-	clientMu sync.RWMutex
+type TsnetManager struct {
+	server *tsnet.Server
 }
 
-func NewServer(hostname string) (*Server, error) {
-	ts := &tsnet.Server{
+func NewTsnetManager() *TsnetManager {
+	return &TsnetManager{}
+}
+
+// サーバーを開始
+func (t *TsnetManager) StartServer(hostname string) error {
+	t.server = &tsnet.Server{
 		Hostname: hostname,
-		Dir:      "./tsnet-server-state", // state 保存先
-		Logf:     log.Printf,
+		Dir:      "./tsnet-server-state",
 	}
 
-	return &Server{
-		ts:      ts,
-		clients: make(map[string]net.Conn),
-	}, nil
-}
+	if err := t.server.Start(); err != nil {
+		return err
+	}
 
-func (s *Server) Start(ctx context.Context, port string) error {
-	// tsnet を起動（state がなければブラウザログインURLがログに出る）
-	status, err := s.ts.Up(ctx)
+	ln, err := t.server.Listen("tcp", ":8080")
 	if err != nil {
-		return fmt.Errorf("failed to bring up tsnet: %w", err)
+		return err
 	}
 
-	log.Printf("Server started with Tailscale IPs: %v", status.TailscaleIPs)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hello from tsnet server!"))
+	})
 
-	// TCPリスナーを作成
-	ln, err := s.ts.Listen("tcp", ":"+port)
-	if err != nil {
-		return fmt.Errorf("failed to listen: %w", err)
-	}
-	defer ln.Close()
-
-	log.Printf("Listening on port %s", port)
-
-	for {
-		conn, err := ln.Accept()
-		if err != nil {
-			log.Printf("Accept error: %v", err)
-			continue
+	go func() {
+		if err := http.Serve(ln, mux); err != nil {
+			log.Println("Server error:", err)
 		}
-
-		go s.handleClient(conn)
-	}
-}
-
-func (s *Server) handleClient(conn net.Conn) {
-	defer conn.Close()
-
-	clientID := conn.RemoteAddr().String()
-	log.Printf("New client connected: %s", clientID)
-
-	s.clientMu.Lock()
-	s.clients[clientID] = conn
-	s.clientMu.Unlock()
-
-	defer func() {
-		s.clientMu.Lock()
-		delete(s.clients, clientID)
-		s.clientMu.Unlock()
-		log.Printf("Client disconnected: %s", clientID)
 	}()
 
-	buf := make([]byte, 4096)
-	for {
-		n, err := conn.Read(buf)
-		if err != nil {
-			if err != io.EOF {
-				log.Printf("Read error from %s: %v", clientID, err)
-			}
-			return
-		}
-
-		message := buf[:n]
-		log.Printf("Received from %s: %s", clientID, string(message))
-
-		s.broadcast(clientID, message)
-	}
+	return nil
 }
 
-func (s *Server) broadcast(senderID string, message []byte) {
-	s.clientMu.RLock()
-	defer s.clientMu.RUnlock()
-
-	for id, conn := range s.clients {
-		if id != senderID {
-			if _, err := conn.Write(message); err != nil {
-				log.Printf("Failed to send to %s: %v", id, err)
-			}
-		}
+// サーバー停止
+func (t *TsnetManager) StopServer() error {
+	if t.server != nil {
+		return t.server.Close()
 	}
+	return nil
 }
 
-func main() {
-	server, err := NewServer("my-relay-server")
-	if err != nil {
-		log.Fatalf("Failed to create server: %v", err)
+// ステータス取得
+func (t *TsnetManager) GetStatus() string {
+	if t.server != nil {
+		return "Running"
 	}
-
-	ctx := context.Background()
-	if err := server.Start(ctx, "8080"); err != nil {
-		log.Fatalf("Server error: %v", err)
-	}
+	return "Stopped"
 }
