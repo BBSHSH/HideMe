@@ -1,46 +1,65 @@
 package main
 
 import (
-	"io"
+	"context"
+	"embed"
 	"log"
-	"time"
+	"net/http"
 
-	"tailscale.com/tsnet"
+	"client/app"
+	"github.com/BBSHSH/saveMyClips/internal/tsnet"
+	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/options"
+	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 )
 
+//go:embed all:frontend/dist
+var assets embed.FS
+
 func main() {
-	clientNames := []string{"Client1", "Client2", "Client3"}
+	videoEditor := app.NewVideoEditorApp()
+	chatApp := app.NewChatApp()
 
-	for _, name := range clientNames {
-		go func(clientName string) {
-			client := &tsnet.Server{
-				Hostname: clientName,
-				Dir:      "./tsnet-" + clientName + "-state",
-			}
+	// 動画サーバー
+	go func() {
+		http.HandleFunc("/video", videoEditor.VideoHandler)
+		log.Println("Video server starting on :8082")
+		if err := http.ListenAndServe(":8082", nil); err != nil {
+			log.Fatal(err)
+		}
+	}()
 
-			if err := client.Start(); err != nil {
-				log.Println(clientName, "start error:", err)
-				return
-			}
-			defer client.Close()
+	// tsnet サーバーを goroutine で起動
+	go tsnetcode.RunTailscale("Client1")
 
-			// サーバーのTailscale IPを指定（例: 100.101.102.103）
-			httpClient := client.HTTPClient()
-			for {
-				resp, err := httpClient.Get("http://100.101.102.103:8080")
-				if err != nil {
-					log.Println(clientName, "connection error:", err)
-					time.Sleep(time.Second * 3)
-					continue
-				}
+	err := wails.Run(&options.App{
+		Title:  "Video Editor & Chat",
+		Width:  1400,
+		Height: 900,
+		AssetServer: &assetserver.Options{
+			Assets: assets,
+		},
+		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
+		OnStartup: func(ctx context.Context) {
+			videoEditor.Startup(ctx)
+			chatApp.Startup(ctx)
+		},
+		OnShutdown: func(ctx context.Context) {
+			videoEditor.Shutdown(ctx)
+			chatApp.Disconnect()
+		},
+		Bind: []interface{}{
+			videoEditor,
+			chatApp,
+		},
+		Windows: &windows.Options{
+			WebviewIsTransparent: false,
+			WindowIsTranslucent:  false,
+		},
+	})
 
-				body, _ := io.ReadAll(resp.Body)
-				resp.Body.Close()
-				log.Println(clientName, "received:", string(body))
-				time.Sleep(time.Second * 5)
-			}
-		}(name)
+	if err != nil {
+		log.Fatal(err)
 	}
-
-	select {}
 }
