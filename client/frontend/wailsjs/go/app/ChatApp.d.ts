@@ -3,15 +3,9 @@
 import {app} from '../models';
 import {context} from '../models';
 
-export function AnswerCall(arg1:string,arg2:string):Promise<void>;
-
 export function ConnectWebSocket():Promise<void>;
 
 export function Disconnect():Promise<void>;
-
-export function GetCurrentUserID():Promise<string>;
-
-export function GetCurrentUserName():Promise<string>;
 
 export function GetMessages(arg1:string):Promise<Array<app.Message>>;
 
@@ -19,10 +13,6 @@ export function GetUsers():Promise<Array<app.User>>;
 
 export function RegisterUser(arg1:string):Promise<void>;
 
-export function SendICECandidate(arg1:string,arg2:any):Promise<void>;
-
 export function SendMessage(arg1:string,arg2:string):Promise<void>;
-
-export function StartCall(arg1:string,arg2:string):Promise<void>;
 
 export function Startup(arg1:context.Context):Promise<void>;

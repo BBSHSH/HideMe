@@ -162,57 +162,6 @@ func (c *ChatApp) GetMessages(otherUserID string) ([]Message, error) {
 	return messages, nil
 }
 
-// StartCall initiates a call with another user
-func (c *ChatApp) StartCall(toID string, offer string) error {
-	wsMsg := WSMessage{
-		Type: "call-offer",
-		Payload: map[string]string{
-			"toId": toID,
-			"sdp":  offer,
-			"type": "offer",
-		},
-	}
-
-	return c.wsConn.WriteJSON(wsMsg)
-}
-
-// AnswerCall answers an incoming call
-func (c *ChatApp) AnswerCall(toID string, answer string) error {
-	wsMsg := WSMessage{
-		Type: "call-answer",
-		Payload: map[string]string{
-			"toId": toID,
-			"sdp":  answer,
-			"type": "answer",
-		},
-	}
-
-	return c.wsConn.WriteJSON(wsMsg)
-}
-
-// SendICECandidate sends ICE candidate
-func (c *ChatApp) SendICECandidate(toID string, candidate interface{}) error {
-	wsMsg := WSMessage{
-		Type: "ice-candidate",
-		Payload: map[string]interface{}{
-			"toId":      toID,
-			"candidate": candidate,
-		},
-	}
-
-	return c.wsConn.WriteJSON(wsMsg)
-}
-
-// GetCurrentUserID returns the current user ID
-func (c *ChatApp) GetCurrentUserID() string {
-	return c.userID
-}
-
-// GetCurrentUserName returns the current user name
-func (c *ChatApp) GetCurrentUserName() string {
-	return c.userName
-}
-
 // Disconnect disconnects from the server
 func (c *ChatApp) Disconnect() {
 	if c.wsConn != nil {

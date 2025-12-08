@@ -7,7 +7,7 @@ import (
 	"net/http"
 
 	"client/app"
-	"github.com/BBSHSH/saveMyClips/internal/tsnet"
+
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
@@ -21,7 +21,7 @@ func main() {
 	videoEditor := app.NewVideoEditorApp()
 	chatApp := app.NewChatApp()
 
-	// 動画サーバー
+	// 動画サーバー（placeholder）
 	go func() {
 		http.HandleFunc("/video", videoEditor.VideoHandler)
 		log.Println("Video server starting on :8082")
@@ -30,11 +30,8 @@ func main() {
 		}
 	}()
 
-	// tsnet サーバーを goroutine で起動
-	go tsnetcode.RunTailscale("Client1")
-
 	err := wails.Run(&options.App{
-		Title:  "Video Editor & Chat",
+		Title:  "HideMe!",
 		Width:  1400,
 		Height: 900,
 		AssetServer: &assetserver.Options{

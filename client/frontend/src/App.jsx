@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Home from './Home';
-import Editor from './Editor';
+import Home from './home';
+import Editor from './editor';
 import Chat from './chat';
 import File from './file';
 

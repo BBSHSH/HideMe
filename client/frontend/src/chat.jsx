@@ -1,363 +1,266 @@
+// chat.jsx - Header対応版
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  RegisterUser, ConnectWebSocket, SendMessage, GetUsers, GetMessages,
-  StartCall, AnswerCall, GetCurrentUserID, GetCurrentUserName
-} from '../wailsjs/go/app/ChatApp';
+import { GetUsers, GetMessages, SendMessage } from '../wailsjs/go/app/ChatApp';
 import { EventsOn } from '../wailsjs/runtime/runtime';
-import './css/Chat.css';
+import './css/chat.css';
+import Header from './components/Header';
 
-function Chat() {
-  const [registered, setRegistered] = useState(false);
-  const [userName, setUserName] = useState('');
-  const [users, setUsers] = useState([]);
-  const [selectedUser, setSelectedUser] = useState(null);
+export default function Chat() {
+  const [contacts, setContacts] = useState([]);
+  const [selectedContact, setSelectedContact] = useState(null);
   const [messages, setMessages] = useState([]);
-  const [messageInput, setMessageInput] = useState('');
-  const [currentUserId, setCurrentUserId] = useState('');
-  const [inCall, setInCall] = useState(false);
-  const [incomingCall, setIncomingCall] = useState(null);
-  
+  const [inputMessage, setInputMessage] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const messagesEndRef = useRef(null);
-  const peerConnectionRef = useRef(null);
-  const localStreamRef = useRef(null);
-  const remoteStreamRef = useRef(null);
 
   useEffect(() => {
-    // イベントリスナー設定
-    EventsOn('message', handleIncomingMessage);
-    EventsOn('user-status', handleUserStatus);
-    EventsOn('call-offer', handleCallOffer);
-    EventsOn('call-answer', handleCallAnswer);
-    EventsOn('ice-candidate', handleICECandidate);
+    loadContacts();
+    
+    // WebSocketからのメッセージを受信
+    EventsOn('message', (msg) => {
+      if (selectedContact && (msg.fromId === selectedContact.id || msg.toId === selectedContact.id)) {
+        setMessages(prev => [...prev, msg]);
+      }
+      loadContacts(); // 連絡先リストを更新
+    });
+
+    EventsOn('user_status', (data) => {
+      setContacts(prev => prev.map(c => 
+        c.id === data.userId ? { ...c, status: data.status } : c
+      ));
+    });
   }, []);
 
   useEffect(() => {
-    if (registered) {
-      loadUsers();
-      const interval = setInterval(loadUsers, 5000);
-      return () => clearInterval(interval);
+    if (selectedContact) {
+      loadMessages(selectedContact.id);
     }
-  }, [registered]);
-
-  useEffect(() => {
-    if (selectedUser) {
-      loadMessages(selectedUser.id);
-    }
-  }, [selectedUser]);
+  }, [selectedContact]);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  const handleRegister = async () => {
-    if (!userName.trim()) return;
-    
+  const loadContacts = async () => {
     try {
-      await RegisterUser(userName);
-      await ConnectWebSocket();
-      const userId = await GetCurrentUserID();
-      setCurrentUserId(userId);
-      setRegistered(true);
+      const users = await GetUsers();
+      const contactsData = users.map(user => ({
+        id: user.id,
+        name: user.name,
+        avatar: user.avatar || '👤',
+        lastMessage: '',
+        time: formatTime(user.lastSeen),
+        unread: 0,
+        status: user.status
+      }));
+      
+      setContacts(contactsData || []);
+      if (contactsData && contactsData.length > 0 && !selectedContact) {
+        setSelectedContact(contactsData[0]);
+      }
     } catch (error) {
-      console.error('Registration error:', error);
-      alert('登録に失敗しました');
+      console.error('Failed to load contacts:', error);
     }
   };
 
-  const loadUsers = async () => {
+  const loadMessages = async (contactId) => {
     try {
-      const userList = await GetUsers();
-      setUsers(userList.filter(u => u.id !== currentUserId));
+      const data = await GetMessages(contactId);
+      const messagesData = (data || []).map(msg => ({
+        id: msg.id,
+        text: msg.content,
+        sender: msg.fromId === contactId ? 'them' : 'me',
+        time: formatMessageTime(msg.timestamp),
+        contactId: contactId
+      }));
+      setMessages(messagesData);
     } catch (error) {
-      console.error('Load users error:', error);
+      console.error('Failed to load messages:', error);
     }
   };
 
-  const loadMessages = async (userId) => {
-    try {
-      const msgs = await GetMessages(userId) || [];
-      setMessages(msgs);
-    } catch (error) {
-      console.error('Load messages error:', error);
+  const handleSearch = (query) => {
+    setSearchQuery(query);
+    if (query.trim() === '') {
+      loadContacts();
+    } else {
+      const filtered = contacts.filter(c => 
+        c.name.toLowerCase().includes(query.toLowerCase())
+      );
+      setContacts(filtered);
     }
   };
 
   const handleSendMessage = async () => {
-    if (!messageInput.trim() || !selectedUser) return;
+    if (!inputMessage.trim() || !selectedContact) return;
 
     try {
-      await SendMessage(selectedUser.id, messageInput);
+      await SendMessage(selectedContact.id, inputMessage);
       
       const newMessage = {
-        fromId: currentUserId,
-        toId: selectedUser.id,
-        content: messageInput,
-        timestamp: new Date(),
-        type: 'text'
+        id: Date.now().toString(),
+        text: inputMessage,
+        sender: 'me',
+        time: new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }),
+        contactId: selectedContact.id
       };
       
-      setMessages([...messages, newMessage]);
-      setMessageInput('');
+      setMessages(prev => [...prev, newMessage]);
+      setInputMessage('');
+      
+      setContacts(prev => prev.map(c => 
+        c.id === selectedContact.id 
+          ? { ...c, lastMessage: inputMessage, time: '今' }
+          : c
+      ));
     } catch (error) {
-      console.error('Send message error:', error);
+      console.error('Failed to send message:', error);
     }
   };
 
-  const handleIncomingMessage = (msg) => {
-    if (selectedUser && (msg.fromId === selectedUser.id || msg.toId === selectedUser.id)) {
-      setMessages(prev => [...prev, msg]);
-    }
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const handleUserStatus = (data) => {
-    setUsers(prev => prev.map(user => 
-      user.id === data.userId ? { ...user, status: data.status } : user
-    ));
-  };
-
-  // WebRTC通話機能
-  const initializePeerConnection = () => {
-    const config = {
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-    };
+  const formatTime = (timestamp) => {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now - date;
     
-    const pc = new RTCPeerConnection(config);
-    
-    pc.onicecandidate = (event) => {
-      if (event.candidate && selectedUser) {
-        SendICECandidate(selectedUser.id, event.candidate);
-      }
-    };
-    
-    pc.ontrack = (event) => {
-      if (remoteStreamRef.current) {
-        remoteStreamRef.current.srcObject = event.streams[0];
-      }
-    };
-    
-    return pc;
+    if (diff < 60000) return '今';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}分前`;
+    if (diff < 86400000) return date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+    if (diff < 604800000) return date.toLocaleDateString('ja-JP', { weekday: 'short' });
+    return date.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
   };
 
-  const startCall = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: true, 
-        audio: true 
-      });
-      
-      localStreamRef.current.srcObject = stream;
-      
-      const pc = initializePeerConnection();
-      peerConnectionRef.current = pc;
-      
-      stream.getTracks().forEach(track => {
-        pc.addTrack(track, stream);
-      });
-      
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      
-      await StartCall(selectedUser.id, JSON.stringify(offer));
-      setInCall(true);
-    } catch (error) {
-      console.error('Start call error:', error);
-      alert('通話を開始できませんでした');
-    }
+  const formatMessageTime = (timestamp) => {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
   };
-
-  const handleCallOffer = async (offer) => {
-    setIncomingCall({
-      fromId: offer.fromId,
-      sdp: offer.sdp
-    });
-  };
-
-  const acceptCall = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: true, 
-        audio: true 
-      });
-      
-      localStreamRef.current.srcObject = stream;
-      
-      const pc = initializePeerConnection();
-      peerConnectionRef.current = pc;
-      
-      stream.getTracks().forEach(track => {
-        pc.addTrack(track, stream);
-      });
-      
-      await pc.setRemoteDescription(JSON.parse(incomingCall.sdp));
-      
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      
-      await AnswerCall(incomingCall.fromId, JSON.stringify(answer));
-      setInCall(true);
-      setIncomingCall(null);
-    } catch (error) {
-      console.error('Accept call error:', error);
-    }
-  };
-
-  const rejectCall = () => {
-    setIncomingCall(null);
-  };
-
-  const endCall = () => {
-    if (peerConnectionRef.current) {
-      peerConnectionRef.current.close();
-    }
-    if (localStreamRef.current && localStreamRef.current.srcObject) {
-      localStreamRef.current.srcObject.getTracks().forEach(track => track.stop());
-    }
-    setInCall(false);
-  };
-
-  const handleCallAnswer = async (answer) => {
-    try {
-      await peerConnectionRef.current.setRemoteDescription(JSON.parse(answer.sdp));
-    } catch (error) {
-      console.error('Handle answer error:', error);
-    }
-  };
-
-  const handleICECandidate = async (data) => {
-    try {
-      await peerConnectionRef.current.addIceCandidate(data.candidate);
-    } catch (error) {
-      console.error('Handle ICE candidate error:', error);
-    }
-  };
-
-  if (!registered) {
-    return (
-      <div className="chat-login">
-        <div className="login-box">
-          <h2>💬 Chat App</h2>
-          <input
-            type="text"
-            placeholder="ユーザー名を入力"
-            value={userName}
-            onChange={(e) => setUserName(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleRegister()}
-            className="login-input"
-          />
-          <button onClick={handleRegister} className="login-btn">
-            ログイン
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="chat-container">
-      <div className="chat-sidebar">
-        <div className="sidebar-header">
-          <h3>💬 チャット</h3>
-          <div className="user-info">{userName}</div>
-        </div>
-        <div className="users-list">
-          {users.map(user => (
-            <div
-              key={user.id}
-              className={`user-item ${selectedUser?.id === user.id ? 'active' : ''}`}
-              onClick={() => setSelectedUser(user)}
-            >
-              <div className={`user-avatar ${user.status}`}>
-                {user.name[0]}
-              </div>
-              <div className="user-details">
-                <div className="user-name">{user.name}</div>
-                <div className="user-status">{user.status}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="chat-main">
-        {selectedUser ? (
-          <>
-            <div className="chat-header">
-              <div className="chat-user-info">
-                <div className={`user-avatar ${selectedUser.status}`}>
-                  {selectedUser.name[0]}
-                </div>
-                <div>
-                  <div className="chat-user-name">{selectedUser.name}</div>
-                  <div className="chat-user-status">{selectedUser.status}</div>
-                </div>
-              </div>
-              <button onClick={startCall} disabled={inCall} className="call-btn">
-                📞 通話
-              </button>
-            </div>
-
-            {inCall && (
-              <div className="call-window">
-                <video ref={remoteStreamRef} autoPlay playsInline className="remote-video" />
-                <video ref={localStreamRef} autoPlay playsInline muted className="local-video" />
-                <button onClick={endCall} className="end-call-btn">通話終了</button>
-              </div>
-            )}
-
-            <div className="messages-container">
-              {messages.map((msg, index) => (
-                <div
-                  key={index}
-                  className={`message ${msg.fromId === currentUserId ? 'sent' : 'received'}`}
-                >
-                  <div className="message-content">{msg.content}</div>
-                  <div className="message-time">
-                    {new Date(msg.timestamp).toLocaleTimeString()}
-                  </div>
-                </div>
-              ))}
-              <div ref={messagesEndRef} />
-            </div>
-
-            <div className="message-input-container">
+    <div className="app">
+      <Header />
+      <div className="chat-container">
+        {/* Left Sidebar */}
+        <div className="sidebar">
+          <div className="sidebar-header">
+            <h1 className="sidebar-title">トーク</h1>
+            <div className="search-container">
+              <span className="search-icon">🔍</span>
               <input
                 type="text"
-                placeholder="メッセージを入力..."
-                value={messageInput}
-                onChange={(e) => setMessageInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                className="message-input"
+                placeholder="検索"
+                value={searchQuery}
+                onChange={(e) => handleSearch(e.target.value)}
+                className="search-input"
               />
-              <button onClick={handleSendMessage} className="send-btn">
-                送信
-              </button>
             </div>
-          </>
-        ) : (
-          <div className="no-chat-selected">
-            <p>チャットを選択してください</p>
           </div>
-        )}
-      </div>
 
-      {incomingCall && (
-        <div className="incoming-call-modal">
-          <div className="modal-content">
-            <h3>着信中...</h3>
-            <p>通話を受けますか？</p>
-            <div className="modal-buttons">
-              <button onClick={acceptCall} className="accept-btn">応答</button>
-              <button onClick={rejectCall} className="reject-btn">拒否</button>
-            </div>
+          <div className="contacts-list">
+            {contacts.map(contact => (
+              <div
+                key={contact.id}
+                onClick={() => setSelectedContact(contact)}
+                className={`contact-item ${selectedContact?.id === contact.id ? 'active' : ''}`}
+              >
+                <div className="contact-avatar-wrapper">
+                  <div className="contact-avatar">{contact.avatar}</div>
+                  {contact.status === 'online' && (
+                    <div className="online-indicator"></div>
+                  )}
+                  {contact.unread > 0 && (
+                    <div className="unread-badge">{contact.unread}</div>
+                  )}
+                </div>
+                <div className="contact-info">
+                  <div className="contact-header">
+                    <h3 className="contact-name">{contact.name}</h3>
+                    <span className="contact-time">{contact.time}</span>
+                  </div>
+                  <p className="contact-last-message">{contact.lastMessage || 'メッセージなし'}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-      )}
+
+        {/* Chat Area */}
+        <div className="chat-area">
+          {selectedContact ? (
+            <>
+              <div className="chat-header">
+                <div className="chat-header-info">
+                  <div className="chat-avatar">{selectedContact.avatar}</div>
+                  <div>
+                    <h2 className="chat-name">{selectedContact.name}</h2>
+                    {selectedContact.status && (
+                      <span className="chat-status">{selectedContact.status === 'online' ? 'オンライン' : 'オフライン'}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="chat-actions">
+                  <button className="action-btn">📞</button>
+                  <button className="action-btn">📹</button>
+                  <button className="action-btn">☰</button>
+                </div>
+              </div>
+
+              <div className="messages-area">
+                <div className="messages-container">
+                  {messages.length === 0 ? (
+                    <div className="no-messages">
+                      <p>メッセージはまだありません</p>
+                    </div>
+                  ) : (
+                    messages.map(msg => (
+                      <div
+                        key={msg.id}
+                        className={`message ${msg.sender === 'me' ? 'message-sent' : 'message-received'}`}
+                      >
+                        <div className="message-bubble">
+                          <p className="message-text">{msg.text}</p>
+                          <p className="message-time">{msg.time}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+              </div>
+
+              <div className="input-area">
+                <div className="input-container">
+                  <button className="more-btn">⋮</button>
+                  <input
+                    type="text"
+                    value={inputMessage}
+                    onChange={(e) => setInputMessage(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
+                    placeholder="メッセージを入力"
+                    className="message-input"
+                  />
+                  <button
+                    onClick={handleSendMessage}
+                    disabled={!inputMessage.trim()}
+                    className="send-btn"
+                  >
+                    ➤
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="no-selection">
+              <p>連絡先を選択してください</p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
-
-export default Chat;

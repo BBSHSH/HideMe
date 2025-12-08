@@ -44,7 +44,7 @@ func NewVideoEditorApp() *VideoEditorApp {
 
 func (v *VideoEditorApp) Startup(ctx context.Context) {
 	v.ctx = ctx
-	v.ffmpegPath = "embedded/ffmpeg.exe"
+	v.ffmpegPath = "ffmpeg/ffmpeg.exe"
 
 	// FFmpegのバージョン確認
 	cmd := exec.Command(v.ffmpegPath, "-version")

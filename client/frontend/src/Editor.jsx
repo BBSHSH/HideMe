@@ -125,11 +125,13 @@ function App() {
   };
 
   const formatTime = (seconds) => {
-    if (!seconds || isNaN(seconds)) return '00:00';
+    if (seconds == null || isNaN(seconds)) return '00:00.00';
     const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    const secs = (seconds % 60).toFixed(2); // 小数2桁
+    const [secInt, secDec] = secs.split('.');
+    return `${mins.toString().padStart(2,'0')}:${secInt.padStart(2,'0')}.${secDec}`;
   };
+
 
   const resetRange = () => {
     setStartTime(0);
@@ -233,6 +235,69 @@ function App() {
     if (!videoInfo || !videoInfo.duration) return 0;
     return (time / videoInfo.duration) * 100;
   };
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.code === "Space") {
+        e.preventDefault(); // スクロール防止
+        handlePlayPause();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isPlaying, startTime, endTime, videoRef]);
+
+  //キーボード操作
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!videoRef.current) return;
+
+      switch (e.code) {
+        case "Space":
+          e.preventDefault();
+          handlePlayPause();
+          break;
+          //十字キー左で5秒戻り
+        case "ArrowLeft":
+          e.preventDefault();
+          videoRef.current.currentTime = Math.max(startTime, videoRef.current.currentTime - 5);
+          setCurrentTime(videoRef.current.currentTime);
+          break;
+          //十字キー右で5秒送り
+        case "ArrowRight":
+          e.preventDefault();
+          videoRef.current.currentTime = Math.min(endTime, videoRef.current.currentTime + 5);
+          setCurrentTime(videoRef.current.currentTime);
+          break;
+          // 十字キー上で音量アップ
+        case "ArrowUp":
+          e.preventDefault();
+          setVolume((prev) => {
+            const newVol = Math.min(1, prev + 0.05);
+            if (videoRef.current) videoRef.current.volume = newVol;
+            return newVol;
+          });
+          break;
+          // 十字キー下で音量ダウン
+        case "ArrowDown":
+          e.preventDefault();
+          setVolume((prev) => {
+            const newVol = Math.max(0, prev - 0.05);
+            if (videoRef.current) videoRef.current.volume = newVol;
+            return newVol;
+          });
+          break;
+        default:
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [startTime, endTime, videoRef]);
 
   return (
     <div className="app">
@@ -249,7 +314,7 @@ function App() {
                     console.error('Video error:', e);
                     setStatus('動画の読み込みに失敗しました');
                 }}
-                controls
+                controls={false}
                 />
             ) : (
                 <div className="preview-placeholder">
