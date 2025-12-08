@@ -2,388 +2,450 @@ package main
 
 import (
 	"fmt"
-	"net/http"
+	"image/color"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
-	"strings"
-	"sync"
+	"syscall"
 	"time"
+	"unsafe"
 
-	"github.com/sqweek/dialog"
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/sqweek/dialog"
 )
 
-type VideoEditor struct {
-	app          fyne.App
-	window       fyne.Window
-	infoLabel    *widget.Label
-	playBtn      *widget.Button
-	stopBtn      *widget.Button
-	timeline     *widget.Slider
-	trimStart    *widget.Slider
-	trimEnd      *widget.Slider
-	volumeSlider *widget.Slider
-	statusLabel  *widget.Label
-	progressBar  *widget.ProgressBar
+// Windows API
+var (
+	user32              = syscall.NewLazyDLL("user32.dll")
+	procFindWindowW     = user32.NewProc("FindWindowW")
+	procCreateWindowExW = user32.NewProc("CreateWindowExW")
+	procMoveWindow      = user32.NewProc("MoveWindow")
+	procShowWindow      = user32.NewProc("ShowWindow")
+	procDestroyWindow   = user32.NewProc("DestroyWindow")
+)
 
-	videoPath      string
-	duration       float64
-	httpPort       int
-	serverStarted  bool
-	serverMutex    sync.Mutex
+const (
+	WS_CHILD        = 0x40000000
+	WS_VISIBLE      = 0x10000000
+	WS_CLIPSIBLINGS = 0x04000000
+	WS_CLIPCHILDREN = 0x02000000
+	SW_SHOW         = 5
+)
 
-	statusText      binding.String
-	videoInfoText   binding.String
-	progressValue   binding.Float
-	progressVisible binding.Bool
-	
-	// スライダー用バインディング
-	timelineMax   binding.Float
-	trimStartMax  binding.Float
-	trimStartVal  binding.Float
-	trimEndMax    binding.Float
-	trimEndVal    binding.Float
+type HWND uintptr
+
+// アプリケーション状態
+type AppState struct {
+	selectedFilePath string
+	isPlaying        bool
+	mpvCmd           *exec.Cmd
+	volume           float64
+
+	// Windows埋め込み用
+	mainHWND         HWND
+	panelHWND        HWND
+	windowTitle      string
+	videoPlaceholder *videoPanel
 }
 
-type VideoInfo struct {
-	Duration float64
-	Width    int
-	Height   int
+// ビデオパネル（位置追跡用カスタムウィジェット）
+type videoPanel struct {
+	widget.BaseWidget
+	state  *AppState
+	window fyne.Window
 }
 
-func main() {
-	a := app.NewWithID("com.example.videoeditor")
-	w := a.NewWindow("動画編集アプリ")
-	w.Resize(fyne.NewSize(800, 600))
-
-	editor := &VideoEditor{
-		app:             a,
-		window:          w,
-		httpPort:        8765,
-		serverStarted:   false,
-		statusText:      binding.NewString(),
-		videoInfoText:   binding.NewString(),
-		progressValue:   binding.NewFloat(),
-		progressVisible: binding.NewBool(),
-		timelineMax:     binding.NewFloat(),
-		trimStartMax:    binding.NewFloat(),
-		trimStartVal:    binding.NewFloat(),
-		trimEndMax:      binding.NewFloat(),
-		trimEndVal:      binding.NewFloat(),
-	}
-
-	// 初期値設定
-	editor.timelineMax.Set(100)
-	editor.trimStartMax.Set(100)
-	editor.trimStartVal.Set(0)
-	editor.trimEndMax.Set(100)
-	editor.trimEndVal.Set(100)
-
-	editor.setupUI()
-	w.ShowAndRun()
+func newVideoPanel(state *AppState, window fyne.Window) *videoPanel {
+	v := &videoPanel{state: state, window: window}
+	v.ExtendBaseWidget(v)
+	return v
 }
 
-// ------------------ ファイルダイアログ ------------------
+func (v *videoPanel) CreateRenderer() fyne.WidgetRenderer {
+	// 黒背景
+	bg := canvas.NewRectangle(color.Black)
 
-func selectVideoFile() string {
-	file, err := dialog.File().Filter("動画ファイル", "mp4", "mov", "mkv", "avi").Load()
-	if err != nil {
-		return ""
+	label := canvas.NewText("動画プレビュー", color.White)
+	label.Alignment = fyne.TextAlignCenter
+
+	return &videoPanelRenderer{
+		panel: v,
+		bg:    bg,
+		label: label,
 	}
-	return file
 }
 
-func saveVideoFile() string {
-	file, err := dialog.File().Filter("動画ファイル", "mp4").Save()
-	if err != nil {
-		return ""
-	}
-	return file
+func (v *videoPanel) MinSize() fyne.Size {
+	return fyne.NewSize(400, 300)
 }
 
-// ------------------ UI設定 ------------------
-
-func (v *VideoEditor) setupUI() {
-	// 動画情報表示エリア（データバインディング使用）
-	v.videoInfoText.Set("動画を選択してください")
-	v.infoLabel = widget.NewLabelWithData(v.videoInfoText)
-	v.infoLabel.Wrapping = fyne.TextWrapWord
-
-	selectBtn := widget.NewButton("動画を選択", func() {
-		path := selectVideoFile()
-		if path != "" {
-			v.loadVideo(path)
-		}
-	})
-
-	v.playBtn = widget.NewButton("▶ 再生", func() { v.playVideo() })
-	v.stopBtn = widget.NewButton("■ 停止", func() { v.stopVideo() })
-
-	// タイムライン
-	v.timeline = widget.NewSlider(0, 100)
-	timelineLabel := widget.NewLabel("00:00 / 00:00")
-	v.timeline.OnChanged = func(val float64) { v.seekVideo(val) }
-
-	playControls := container.NewBorder(nil, nil, container.NewHBox(v.playBtn, v.stopBtn), timelineLabel, v.timeline)
-
-	// トリミング
-	v.trimStart = widget.NewSlider(0, 100)
-	v.trimEnd = widget.NewSlider(0, 100)
-
-	trimStartLabel := widget.NewLabel("開始: 0.0秒")
-	v.trimStart.OnChanged = func(val float64) {
-		trimStartLabel.SetText(fmt.Sprintf("開始: %.1f秒", val))
-	}
-
-	trimEndLabel := widget.NewLabel("終了: 0.0秒")
-	v.trimEnd.OnChanged = func(val float64) {
-		trimEndLabel.SetText(fmt.Sprintf("終了: %.1f秒", val))
-	}
-
-	trimBox := container.NewVBox(
-		widget.NewLabel("トリミング範囲"),
-		container.NewBorder(nil, nil, trimStartLabel, nil, v.trimStart),
-		container.NewBorder(nil, nil, trimEndLabel, nil, v.trimEnd),
-	)
-
-	// 音量
-	v.volumeSlider = widget.NewSlider(0, 200)
-	v.volumeSlider.SetValue(100)
-	volumeLabel := widget.NewLabel("音量: 100%")
-	v.volumeSlider.OnChanged = func(val float64) {
-		volumeLabel.SetText(fmt.Sprintf("音量: %.0f%%", val))
-	}
-	volumeBox := container.NewBorder(nil, nil, volumeLabel, nil, v.volumeSlider)
-
-	// 保存
-	saveBtn := widget.NewButton("動画を保存", func() {
-		if v.videoPath == "" {
-			v.statusText.Set("動画が選択されていません")
-			return
-		}
-		outputPath := saveVideoFile()
-		if outputPath != "" {
-			v.exportVideo(outputPath)
-		}
-	})
-
-	v.statusText.Set("動画を選択してください")
-	v.statusLabel = widget.NewLabelWithData(v.statusText)
-
-	v.progressValue.Set(0)
-	v.progressVisible.Set(false)
-	v.progressBar = widget.NewProgressBarWithData(v.progressValue)
-	v.progressBar.Hide()
-
-	statusBox := container.NewVBox(v.statusLabel, v.progressBar)
-
-	// 動画情報表示エリアをスクロール可能に
-	infoScroll := container.NewScroll(v.infoLabel)
-	infoScroll.SetMinSize(fyne.NewSize(0, 150))
-
-	content := container.NewBorder(
-		container.NewVBox(selectBtn, infoScroll),
-		container.NewVBox(playControls, trimBox, volumeBox, saveBtn, statusBox),
-		nil, nil,
-		container.NewCenter(widget.NewLabel("プレビューエリア")),
-	)
-	v.window.SetContent(content)
+type videoPanelRenderer struct {
+	panel *videoPanel
+	bg    *canvas.Rectangle
+	label *canvas.Text
 }
 
-// ------------------ 動画読み込み ------------------
+func (r *videoPanelRenderer) Layout(size fyne.Size) {
+	r.bg.Resize(size)
+	r.label.Move(fyne.NewPos(size.Width/2-50, size.Height/2-10))
 
-func (v *VideoEditor) loadVideo(path string) {
-	v.videoPath = path
-	v.statusText.Set(fmt.Sprintf("読み込み中: %s", filepath.Base(path)))
-
-	go func() {
-		info, err := v.getVideoInfo(path)
-		if err != nil {
-			v.statusText.Set(fmt.Sprintf("エラー: %v", err))
-			return
-		}
-
-		v.duration = info.Duration
-		
-		// スライダーの更新（エラーは出るが動作する）
-		v.timeline.Max = info.Duration
-		v.trimStart.Max = info.Duration
-		v.trimEnd.Max = info.Duration
-		v.trimEnd.SetValue(info.Duration)
-
-		// データバインディングを使ってUI更新
-		v.statusText.Set(fmt.Sprintf("準備完了: %s (%.1f秒)", filepath.Base(path), info.Duration))
-		
-		// 動画情報をテキストで表示
-		infoText := fmt.Sprintf("【動画情報】\n\nファイル名: %s\n\n長さ: %.1f秒\n\n解像度: %dx%d\n\nHTTPサーバー: http://localhost:%d/video",
-			filepath.Base(path), info.Duration, info.Width, info.Height, v.httpPort)
-		v.videoInfoText.Set(infoText)
-
-		v.startHTTPServer()
-	}()
+	// パネル位置更新
+	if r.panel.state != nil && r.panel.state.panelHWND != 0 {
+		go r.panel.updatePanelPosition()
+	}
 }
 
-func (v *VideoEditor) getVideoInfo(path string) (*VideoInfo, error) {
-	ffmpegPath := filepath.Join(".", "ffmpeg", "ffmpeg.exe")
-
-	if _, err := os.Stat(ffmpegPath); err != nil {
-		return nil, fmt.Errorf("ffmpeg not found: %v", err)
-	}
-	if _, err := os.Stat(path); err != nil {
-		return nil, fmt.Errorf("video file not found: %v", err)
-	}
-
-	args := []string{"-i", path, "-f", "null", "-"}
-	cmd := exec.Command(ffmpegPath, args...)
-	output, _ := cmd.CombinedOutput()
-	lines := strings.Split(string(output), "\n")
-
-	info := &VideoInfo{}
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-
-		if strings.Contains(line, "Duration:") {
-			parts := strings.Split(line, "Duration: ")
-			if len(parts) > 1 {
-				timeStr := strings.TrimSpace(strings.Split(parts[1], ",")[0])
-				info.Duration = parseTimeString(timeStr)
-			}
-		}
-
-		if strings.Contains(line, "Stream") && strings.Contains(line, "Video:") {
-			parts := strings.Fields(line)
-			for _, part := range parts {
-				if strings.Contains(part, "x") && !strings.Contains(part, "0x") {
-					resPart := strings.TrimRight(part, ",")
-					dims := strings.Split(resPart, "x")
-					if len(dims) == 2 {
-						w, err1 := strconv.Atoi(dims[0])
-						h, err2 := strconv.Atoi(dims[1])
-						if err1 == nil && err2 == nil && w > 0 && h > 0 {
-							info.Width = w
-							info.Height = h
-							break
-						}
-					}
-				}
-			}
-		}
-	}
-
-	if info.Duration == 0 {
-		return nil, fmt.Errorf("動画の長さを取得できませんでした")
-	}
-	if info.Width == 0 || info.Height == 0 {
-		info.Width = 1280
-		info.Height = 720
-	}
-
-	return info, nil
+func (r *videoPanelRenderer) MinSize() fyne.Size {
+	return fyne.NewSize(400, 300)
 }
 
-func parseTimeString(timeStr string) float64 {
-	parts := strings.Split(strings.TrimSpace(timeStr), ":")
-	if len(parts) != 3 {
-		return 0
-	}
-	hours, _ := strconv.ParseFloat(parts[0], 64)
-	minutes, _ := strconv.ParseFloat(parts[1], 64)
-	seconds, _ := strconv.ParseFloat(parts[2], 64)
-	return hours*3600 + minutes*60 + seconds
+func (r *videoPanelRenderer) Refresh() {
+	r.bg.FillColor = color.Black
+	r.bg.Refresh()
 }
 
-// ------------------ HTTPサーバー ------------------
+func (r *videoPanelRenderer) Objects() []fyne.CanvasObject {
+	return []fyne.CanvasObject{r.bg, r.label}
+}
 
-func (v *VideoEditor) startHTTPServer() {
-	v.serverMutex.Lock()
-	defer v.serverMutex.Unlock()
+func (r *videoPanelRenderer) Destroy() {}
 
-	if v.serverStarted {
+func (v *videoPanel) updatePanelPosition() {
+	if v.state.mainHWND == 0 || v.state.panelHWND == 0 {
 		return
 	}
 
-	v.serverStarted = true
+	pos := v.Position()
+	size := v.Size()
+	scale := v.window.Canvas().Scale()
 
-	http.HandleFunc("/video", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, v.videoPath)
+	x := int(pos.X * scale)
+	y := int(pos.Y * scale)
+	w := int(size.Width * scale)
+	h := int(size.Height * scale)
+
+	// タイトルバーとボーダーの補正
+	titleBarHeight := int(32 * scale)
+	borderWidth := int(8 * scale)
+
+	procMoveWindow.Call(
+		uintptr(v.state.panelHWND),
+		uintptr(x+borderWidth),
+		uintptr(y+titleBarHeight),
+		uintptr(w),
+		uintptr(h),
+		1,
+	)
+}
+
+func main() {
+	myApp := app.New()
+	myApp.Settings().SetTheme(theme.DarkTheme())
+
+	title := "動画トリミングツール"
+	myWindow := myApp.NewWindow(title)
+	myWindow.Resize(fyne.NewSize(900, 700))
+
+	state := &AppState{
+		volume:      100,
+		windowTitle: title,
+	}
+
+	ui := createUI(myWindow, state)
+	myWindow.SetContent(ui)
+
+	myWindow.SetOnClosed(func() {
+		stopVideo(state)
+		if state.panelHWND != 0 {
+			procDestroyWindow.Call(uintptr(state.panelHWND))
+		}
 	})
 
 	go func() {
-		addr := fmt.Sprintf(":%d", v.httpPort)
-		http.ListenAndServe(addr, nil)
+		time.Sleep(500 * time.Millisecond)
+		initEmbedding(state)
 	}()
+
+	myWindow.ShowAndRun()
 }
 
-// ------------------ 再生 / 停止 / シーク ------------------
+func initEmbedding(state *AppState) {
+	state.mainHWND = findWindowByTitle(state.windowTitle)
+	if state.mainHWND == 0 {
+		fmt.Println("メインウィンドウのHWNDが見つかりません")
+		return
+	}
+	fmt.Printf("メインHWND: %d\n", state.mainHWND)
 
-func (v *VideoEditor) playVideo() {
-	v.statusText.Set("再生中...")
+	createEmbedPanel(state)
 }
 
-func (v *VideoEditor) stopVideo() {
-	v.statusText.Set("停止")
+func findWindowByTitle(title string) HWND {
+	titlePtr, _ := syscall.UTF16PtrFromString(title)
+	ret, _, _ := procFindWindowW.Call(0, uintptr(unsafe.Pointer(titlePtr)))
+	return HWND(ret)
 }
 
-func (v *VideoEditor) seekVideo(f float64) {
-	// シーク用（未実装）
+func createEmbedPanel(state *AppState) {
+	if state.mainHWND == 0 {
+		return
+	}
+
+	className, _ := syscall.UTF16PtrFromString("STATIC")
+	style := uintptr(WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN)
+
+	ret, _, err := procCreateWindowExW.Call(
+		0,
+		uintptr(unsafe.Pointer(className)),
+		0,
+		style,
+		uintptr(20), uintptr(200),
+		uintptr(860), uintptr(350),
+		uintptr(state.mainHWND),
+		0, 0, 0,
+	)
+
+	if ret == 0 {
+		fmt.Println("パネル作成失敗:", err)
+		return
+	}
+
+	state.panelHWND = HWND(ret)
+	procShowWindow.Call(uintptr(state.panelHWND), SW_SHOW)
+	fmt.Printf("パネルHWND: %d\n", state.panelHWND)
+
+	if state.videoPlaceholder != nil {
+		state.videoPlaceholder.updatePanelPosition()
+	}
 }
 
-// ------------------ 動画エクスポート ------------------
+func createUI(window fyne.Window, state *AppState) fyne.CanvasObject {
+	fileLabel := widget.NewLabel("ファイル: 未選択")
+	fileLabel.Wrapping = fyne.TextWrapWord
 
-func (v *VideoEditor) exportVideo(outputPath string) {
-	startTime := v.trimStart.Value
-	endTime := v.trimEnd.Value
-	volume := v.volumeSlider.Value / 100.0
+	outputEntry := widget.NewEntry()
+	outputEntry.SetPlaceHolder("自動生成されます")
 
-	v.statusText.Set("エクスポート中...")
-	v.progressVisible.Set(true)
-	v.progressBar.Show()
+	selectFileBtn := widget.NewButtonWithIcon("ファイル選択", theme.FolderOpenIcon(), func() {
+		filePath, err := dialog.File().Filter("動画ファイル", "mp4", "mkv", "avi", "mov", "webm").Load()
+		if err != nil {
+			fmt.Println("キャンセルまたはエラー:", err)
+			return
+		}
+		state.selectedFilePath = filePath
+		fileLabel.SetText("ファイル: " + state.selectedFilePath)
+		outputEntry.SetText(generateOutputFileName(filePath))
+	})
 
-	go func() {
-		ffmpegPath := filepath.Join(".", "ffmpeg", "ffmpeg.exe")
-		args := []string{
-			"-i", v.videoPath,
-			"-ss", fmt.Sprintf("%.2f", startTime),
-			"-to", fmt.Sprintf("%.2f", endTime),
-			"-af", fmt.Sprintf("volume=%.2f", volume),
-			"-c:v", "libx264",
-			"-preset", "fast",
-			"-c:a", "aac",
-			"-y", outputPath,
+	playBtn := widget.NewButtonWithIcon("再生", theme.MediaPlayIcon(), nil)
+	stopBtn := widget.NewButtonWithIcon("停止", theme.MediaStopIcon(), nil)
+	stopBtn.Disable()
+
+	playBtn.OnTapped = func() {
+		if state.selectedFilePath == "" {
+			fmt.Println("ファイル未選択")
+			return
+		}
+		if state.isPlaying {
+			return
+		}
+		if state.panelHWND == 0 {
+			fmt.Println("埋め込みパネルが準備できていません、外部ウィンドウで再生")
+			go playVideoExternal(state)
+		} else {
+			go playVideoEmbedded(state)
+		}
+		playBtn.Disable()
+		stopBtn.Enable()
+	}
+
+	stopBtn.OnTapped = func() {
+		stopVideo(state)
+		playBtn.Enable()
+		stopBtn.Disable()
+	}
+
+	volumeLabel := widget.NewLabel("音量: 100%")
+	volumeSlider := widget.NewSlider(0, 100)
+	volumeSlider.Value = 100
+	volumeSlider.OnChanged = func(value float64) {
+		state.volume = value
+		volumeLabel.SetText(fmt.Sprintf("音量: %.0f%%", value))
+	}
+
+	// ビデオプレビュー用カスタムウィジェット
+	videoPanel := newVideoPanel(state, window)
+	state.videoPlaceholder = videoPanel
+
+	startTimeEntry := widget.NewEntry()
+	startTimeEntry.SetText("0")
+	startTimeEntry.SetPlaceHolder("開始秒数")
+
+	endTimeEntry := widget.NewEntry()
+	endTimeEntry.SetText("0")
+	endTimeEntry.SetPlaceHolder("終了秒数 (0=最後まで)")
+
+	processBtn := widget.NewButtonWithIcon("処理開始", theme.MediaRecordIcon(), func() {
+		if state.selectedFilePath == "" {
+			fmt.Println("ファイル未選択")
+			return
 		}
 
-		cmd := exec.Command(ffmpegPath, args...)
-		done := make(chan error)
-		go func() { done <- cmd.Run() }()
-
-		ticker := time.NewTicker(100 * time.Millisecond)
-		defer ticker.Stop()
-
-		progress := 0.0
-		for {
-			select {
-			case err := <-done:
-				v.progressBar.Hide()
-				v.progressVisible.Set(false)
-				if err != nil {
-					v.statusText.Set(fmt.Sprintf("エラー: %v", err))
-				} else {
-					v.statusText.Set(fmt.Sprintf("保存完了: %s", filepath.Base(outputPath)))
-				}
-				return
-			case <-ticker.C:
-				progress += 0.01
-				if progress > 1.0 {
-					progress = 0.0
-				}
-				v.progressValue.Set(progress)
-			}
+		startSec, err1 := strconv.Atoi(startTimeEntry.Text)
+		endSec, err2 := strconv.Atoi(endTimeEntry.Text)
+		if err1 != nil || err2 != nil {
+			fmt.Println("時間指定が不正")
+			return
 		}
-	}()
+		if endSec > 0 && startSec >= endSec {
+			fmt.Println("終了時間は開始時間より後にしてください")
+			return
+		}
+
+		outputFile := outputEntry.Text
+		if outputFile == "" {
+			outputFile = generateOutputFileName(state.selectedFilePath)
+		}
+
+		go execFFmpegTrim(state.selectedFilePath, outputFile, startSec, endSec)
+	})
+	processBtn.Importance = widget.HighImportance
+
+	// レイアウト
+	fileSection := widget.NewCard("ファイル選択", "",
+		container.NewVBox(fileLabel, selectFileBtn),
+	)
+
+	controlSection := widget.NewCard("再生コントロール", "",
+		container.NewHBox(
+			playBtn,
+			stopBtn,
+			layout.NewSpacer(),
+			volumeLabel,
+			container.NewGridWrap(fyne.NewSize(200, 40), volumeSlider),
+		),
+	)
+
+	videoSection := widget.NewCard("動画プレビュー", "",
+		container.NewGridWrap(fyne.NewSize(860, 350), videoPanel),
+	)
+
+	trimSection := widget.NewCard("トリミング設定", "",
+		container.NewVBox(
+			container.NewGridWithColumns(4,
+				widget.NewLabel("開始時間 (秒):"), startTimeEntry,
+				widget.NewLabel("終了時間 (秒):"), endTimeEntry,
+			),
+			container.NewBorder(nil, nil,
+				widget.NewLabel("出力ファイル:"), nil, outputEntry,
+			),
+		),
+	)
+
+	processSection := container.NewCenter(processBtn)
+
+	content := container.NewVBox(
+		fileSection,
+		controlSection,
+		videoSection,
+		trimSection,
+		processSection,
+	)
+
+	return container.NewPadded(content)
+}
+
+func generateOutputFileName(inputPath string) string {
+	timestamp := time.Now().Format("20060102_150405")
+	ext := ". mp4"
+	for i := len(inputPath) - 1; i >= 0; i-- {
+		if inputPath[i] == '.' {
+			ext = inputPath[i:]
+			break
+		}
+	}
+	return fmt.Sprintf("output_%s%s", timestamp, ext)
+}
+
+func playVideoEmbedded(state *AppState) {
+	state.isPlaying = true
+
+	args := []string{
+		"--player-operation-mode=pseudo-gui",
+		"--force-window=yes",
+		"--volume=" + fmt.Sprintf("%.0f", state.volume),
+		"--loop=inf",
+		"--wid=" + fmt.Sprint(uintptr(state.panelHWND)),
+		"--no-border",
+		state.selectedFilePath,
+	}
+
+	state.mpvCmd = exec.Command("mpv.exe", args...)
+	state.mpvCmd.Stdout = os.Stdout
+	state.mpvCmd.Stderr = os.Stderr
+
+	err := state.mpvCmd.Run()
+	if err != nil {
+		fmt.Println("mpvエラー:", err)
+	}
+
+	state.isPlaying = false
+	state.mpvCmd = nil
+}
+
+func playVideoExternal(state *AppState) {
+	state.isPlaying = true
+	args := []string{
+		"--player-operation-mode=pseudo-gui",
+		"--force-window=yes",
+		"--volume=" + fmt.Sprintf("%.0f", state.volume),
+		"--loop=inf",
+		"--title=動画プレビュー",
+		state.selectedFilePath,
+	}
+	state.mpvCmd = exec.Command("mpv.exe", args...)
+	state.mpvCmd.Stdout = os.Stdout
+	state.mpvCmd.Stderr = os.Stderr
+	_ = state.mpvCmd.Run()
+	state.isPlaying = false
+	state.mpvCmd = nil
+}
+
+func stopVideo(state *AppState) {
+	if state.mpvCmd != nil && state.mpvCmd.Process != nil {
+		state.mpvCmd.Process.Kill()
+		state.mpvCmd = nil
+		state.isPlaying = false
+	}
+}
+
+func execFFmpegTrim(input, output string, startSec, endSec int) {
+	fmt.Printf("処理開始: %s -> %s (開始:%d, 終了:%d)\n", input, output, startSec, endSec)
+
+	args := []string{"-y", "-i", input}
+
+	if startSec > 0 {
+		args = append(args, "-ss", fmt.Sprint(startSec))
+	}
+	if endSec > 0 {
+		args = append(args, "-to", fmt.Sprint(endSec))
+	}
+	args = append(args, "-c", "copy", output)
+
+	cmd := exec.Command("ffmpeg", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	err := cmd.Run()
+	if err != nil {
+		fmt.Println("FFmpegエラー:", err)
+	} else {
+		fmt.Println("処理完了:", output)
+	}
 }
