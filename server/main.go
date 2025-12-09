@@ -1,62 +1,32 @@
-package app
+package main
 
 import (
+	"hidemeserver/app"
 	"log"
 	"net/http"
-
-	"tailscale.com/tsnet"
 )
 
-type TsnetManager struct {
-	server *tsnet.Server
-}
-
-func NewTsnetManager() *TsnetManager {
-	return &TsnetManager{}
-}
-
-// サーバーを開始
-func (t *TsnetManager) StartServer(hostname string) error {
-	t.server = &tsnet.Server{
-		Hostname: hostname,
-		Dir:      "./tsnet-server-state",
+func main() {
+	tsnetMgr := app.NewTsnetManager()
+	if err := tsnetMgr.StartServer("hide-me-chat"); err != nil {
+		log.Fatal(err)
 	}
+	defer tsnetMgr.StopServer()
 
-	if err := t.server.Start(); err != nil {
-		return err
-	}
+	chat := app.NewChatServer()
+	chat.StartBroadcast()
 
-	ln, err := t.server.Listen("tcp", ":8080")
+	// WebSocketハンドラ
+	http.HandleFunc("/ws", chat.HandleWS)
+
+	// tsnet のリスナーを使う
+	ln, err := tsnetMgr.Server().Listen("tcp", ":8080")
 	if err != nil {
-		return err
+		log.Fatal(err)
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello from tsnet server!"))
-	})
-
-	go func() {
-		if err := http.Serve(ln, mux); err != nil {
-			log.Println("Server error:", err)
-		}
-	}()
-
-	return nil
-}
-
-// サーバー停止
-func (t *TsnetManager) StopServer() error {
-	if t.server != nil {
-		return t.server.Close()
+	log.Println("Chat server running on tsnet at :8080")
+	if err := http.Serve(ln, nil); err != nil {
+		log.Fatal(err)
 	}
-	return nil
-}
-
-// ステータス取得
-func (t *TsnetManager) GetStatus() string {
-	if t.server != nil {
-		return "Running"
-	}
-	return "Stopped"
 }

@@ -1,144 +1,140 @@
-// chat.jsx - Header対応版
 import React, { useState, useEffect, useRef } from 'react';
-import { GetUsers, GetMessages, SendMessage } from '../wailsjs/go/app/ChatApp';
-import { EventsOn } from '../wailsjs/runtime/runtime';
 import './css/chat.css';
 import Header from './components/Header';
 
+// テストデータ
+const TEST_CONTACTS = [
+  {
+    id: '1',
+    name: '徳永 瀬那',
+    avatar: 'T',
+    lastMessage: 'トロールしまーす',
+    time: '9:30',
+    unread: 3,
+    status: 'online'
+  },
+  {
+    id: '2',
+    name: '山田 花子',
+    avatar: 'Y',
+    lastMessage: 'ありがとうございます！',
+    time: '昨日',
+    unread: 0,
+    status: 'online'
+  },
+  {
+    id: '3',
+    name: '佐藤 次郎',
+    avatar: 'S',
+    lastMessage: '了解です',
+    time: '月曜日',
+    unread: 0,
+    status: 'offline'
+  },
+  {
+    id: '4',
+    name: '鈴木 美咲',
+    avatar: 'M',
+    lastMessage: '今日の会議は何時でしたっけ?',
+    time: '10:15',
+    unread: 1,
+    status: 'online'
+  },
+  {
+    id: '5',
+    name: '高橋 健',
+    avatar: 'T',
+    lastMessage: 'お疲れ様です',
+    time: '火曜日',
+    unread: 0,
+    status: 'offline'
+  }
+];
+
+const TEST_MESSAGES = {
+  '1': [
+    { id: '1', text: 'トロールしまーす!', sender: 'them', time: '9:25', senderName: '徳永 瀬那' },
+    { id: '2', text: 'ほんまにやめて', sender: 'me', time: '9:26' },
+    { id: '3', text: 'むりぽｗｗｗ', sender: 'them', time: '9:27', senderName: '徳永 瀬那' },
+    { id: '4', text: '？？？', sender: 'me', time: '9:28' },
+    { id: '5', text: 'どんまいｗｗ', sender: 'them', time: '9:30', senderName: '徳永 瀬那' }
+  ],
+  '2': [
+    { id: '1', text: '資料送っていただけますか？', sender: 'them', time: '14:20', senderName: '山田 花子' },
+    { id: '2', text: 'はい、今すぐ送ります', sender: 'me', time: '14:21' },
+    { id: '3', text: 'ありがとうございます！', sender: 'them', time: '14:22', senderName: '山田 花子' }
+  ],
+  '3': [
+    { id: '1', text: '明日の打ち合わせ、10時からでお願いします', sender: 'me', time: '16:45' },
+    { id: '2', text: '了解です', sender: 'them', time: '16:46', senderName: '佐藤 次郎' }
+  ],
+  '4': [
+    { id: '1', text: '今日の会議は何時でしたっけ?', sender: 'them', time: '10:15', senderName: '鈴木 美咲' }
+  ],
+  '5': [
+    { id: '1', text: 'プレゼン資料確認しました', sender: 'them', time: '11:30', senderName: '高橋 健' },
+    { id: '2', text: 'ありがとうございます', sender: 'me', time: '11:31' },
+    { id: '3', text: 'お疲れ様です', sender: 'them', time: '11:32', senderName: '高橋 健' }
+  ]
+};
+
 export default function Chat() {
-  const [contacts, setContacts] = useState([]);
-  const [selectedContact, setSelectedContact] = useState(null);
-  const [messages, setMessages] = useState([]);
+  const [contacts, setContacts] = useState(TEST_CONTACTS);
+  const [selectedContact, setSelectedContact] = useState(TEST_CONTACTS[0]);
+  const [messages, setMessages] = useState(TEST_MESSAGES['1']);
   const [inputMessage, setInputMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
-    loadContacts();
-    
-    // WebSocketからのメッセージを受信
-    EventsOn('message', (msg) => {
-      if (selectedContact && (msg.fromId === selectedContact.id || msg.toId === selectedContact.id)) {
-        setMessages(prev => [...prev, msg]);
-      }
-      loadContacts(); // 連絡先リストを更新
-    });
-
-    EventsOn('user_status', (data) => {
-      setContacts(prev => prev.map(c => 
-        c.id === data.userId ? { ...c, status: data.status } : c
-      ));
-    });
-  }, []);
-
-  useEffect(() => {
-    if (selectedContact) {
-      loadMessages(selectedContact.id);
-    }
-  }, [selectedContact]);
-
-  useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  const loadContacts = async () => {
-    try {
-      const users = await GetUsers();
-      const contactsData = users.map(user => ({
-        id: user.id,
-        name: user.name,
-        avatar: user.avatar || '👤',
-        lastMessage: '',
-        time: formatTime(user.lastSeen),
-        unread: 0,
-        status: user.status
-      }));
-      
-      setContacts(contactsData || []);
-      if (contactsData && contactsData.length > 0 && !selectedContact) {
-        setSelectedContact(contactsData[0]);
-      }
-    } catch (error) {
-      console.error('Failed to load contacts:', error);
+  useEffect(() => {
+    if (selectedContact) {
+      setMessages(TEST_MESSAGES[selectedContact.id] || []);
+      // 未読をクリア
+      setContacts(prev => prev.map(c => 
+        c.id === selectedContact.id ? { ...c, unread: 0 } : c
+      ));
     }
-  };
-
-  const loadMessages = async (contactId) => {
-    try {
-      const data = await GetMessages(contactId);
-      const messagesData = (data || []).map(msg => ({
-        id: msg.id,
-        text: msg.content,
-        sender: msg.fromId === contactId ? 'them' : 'me',
-        time: formatMessageTime(msg.timestamp),
-        contactId: contactId
-      }));
-      setMessages(messagesData);
-    } catch (error) {
-      console.error('Failed to load messages:', error);
-    }
-  };
+  }, [selectedContact]);
 
   const handleSearch = (query) => {
     setSearchQuery(query);
     if (query.trim() === '') {
-      loadContacts();
+      setContacts(TEST_CONTACTS);
     } else {
-      const filtered = contacts.filter(c => 
+      const filtered = TEST_CONTACTS.filter(c => 
         c.name.toLowerCase().includes(query.toLowerCase())
       );
       setContacts(filtered);
     }
   };
 
-  const handleSendMessage = async () => {
+  const handleSendMessage = () => {
     if (!inputMessage.trim() || !selectedContact) return;
 
-    try {
-      await SendMessage(selectedContact.id, inputMessage);
-      
-      const newMessage = {
-        id: Date.now().toString(),
-        text: inputMessage,
-        sender: 'me',
-        time: new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }),
-        contactId: selectedContact.id
-      };
-      
-      setMessages(prev => [...prev, newMessage]);
-      setInputMessage('');
-      
-      setContacts(prev => prev.map(c => 
-        c.id === selectedContact.id 
-          ? { ...c, lastMessage: inputMessage, time: '今' }
-          : c
-      ));
-    } catch (error) {
-      console.error('Failed to send message:', error);
-    }
+    const newMessage = {
+      id: Date.now().toString(),
+      text: inputMessage,
+      sender: 'me',
+      time: new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+    };
+    
+    setMessages(prev => [...prev, newMessage]);
+    setInputMessage('');
+    
+    // 連絡先リストの最終メッセージを更新
+    setContacts(prev => prev.map(c => 
+      c.id === selectedContact.id 
+        ? { ...c, lastMessage: inputMessage, time: '今' }
+        : c
+    ));
   };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  const formatTime = (timestamp) => {
-    if (!timestamp) return '';
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diff = now - date;
-    
-    if (diff < 60000) return '今';
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}分前`;
-    if (diff < 86400000) return date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-    if (diff < 604800000) return date.toLocaleDateString('ja-JP', { weekday: 'short' });
-    return date.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
-  };
-
-  const formatMessageTime = (timestamp) => {
-    if (!timestamp) return '';
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
   };
 
   return (
@@ -148,12 +144,12 @@ export default function Chat() {
         {/* Left Sidebar */}
         <div className="sidebar">
           <div className="sidebar-header">
-            <h1 className="sidebar-title">トーク</h1>
+            <h1 className="sidebar-title">ダイレクトメッセージ</h1>
             <div className="search-container">
               <span className="search-icon">🔍</span>
               <input
                 type="text"
-                placeholder="検索"
+                placeholder="会話を検索"
                 value={searchQuery}
                 onChange={(e) => handleSearch(e.target.value)}
                 className="search-input"
@@ -182,7 +178,7 @@ export default function Chat() {
                     <h3 className="contact-name">{contact.name}</h3>
                     <span className="contact-time">{contact.time}</span>
                   </div>
-                  <p className="contact-last-message">{contact.lastMessage || 'メッセージなし'}</p>
+                  <p className="contact-last-message">{contact.lastMessage}</p>
                 </div>
               </div>
             ))}
@@ -199,14 +195,16 @@ export default function Chat() {
                   <div>
                     <h2 className="chat-name">{selectedContact.name}</h2>
                     {selectedContact.status && (
-                      <span className="chat-status">{selectedContact.status === 'online' ? 'オンライン' : 'オフライン'}</span>
+                      <span className="chat-status">
+                        {selectedContact.status === 'online' ? 'オンライン' : 'オフライン'}
+                      </span>
                     )}
                   </div>
                 </div>
                 <div className="chat-actions">
-                  <button className="action-btn">📞</button>
-                  <button className="action-btn">📹</button>
-                  <button className="action-btn">☰</button>
+                  <button className="action-btn" title="音声通話">📞</button>
+                  <button className="action-btn" title="ビデオ通話">📹</button>
+                  <button className="action-btn" title="メニュー">⋮</button>
                 </div>
               </div>
 
@@ -223,8 +221,21 @@ export default function Chat() {
                         className={`message ${msg.sender === 'me' ? 'message-sent' : 'message-received'}`}
                       >
                         <div className="message-bubble">
-                          <p className="message-text">{msg.text}</p>
-                          <p className="message-time">{msg.time}</p>
+                          {msg.sender === 'them' && (
+                            <div className="message-avatar">{selectedContact.avatar}</div>
+                          )}
+                          <div className="message-content-wrapper">
+                            {msg.sender === 'them' && (
+                              <div className="message-sender">
+                                {msg.senderName}
+                                <span className="message-time">{msg.time}</span>
+                              </div>
+                            )}
+                            <p className="message-text">{msg.text}</p>
+                            {msg.sender === 'me' && (
+                              <span className="message-time">{msg.time}</span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))
@@ -235,19 +246,20 @@ export default function Chat() {
 
               <div className="input-area">
                 <div className="input-container">
-                  <button className="more-btn">⋮</button>
+                  <button className="more-btn" title="ファイル添付">＋</button>
                   <input
                     type="text"
                     value={inputMessage}
                     onChange={(e) => setInputMessage(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
-                    placeholder="メッセージを入力"
+                    placeholder={`${selectedContact.name}へメッセージを送信`}
                     className="message-input"
                   />
                   <button
                     onClick={handleSendMessage}
                     disabled={!inputMessage.trim()}
                     className="send-btn"
+                    title="送信"
                   >
                     ➤
                   </button>
@@ -256,7 +268,7 @@ export default function Chat() {
             </>
           ) : (
             <div className="no-selection">
-              <p>連絡先を選択してください</p>
+              <p>会話を選択してメッセージを開始しましょう</p>
             </div>
           )}
         </div>

@@ -4,6 +4,7 @@ import Home from './home';
 import Editor from './editor';
 import Chat from './chat';
 import File from './file';
+import FileManage from './filemanage';
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
         <Route path="/chat" element={<Chat />} />
         <Route path="/file" element={<File />} />
         <Route path="/editor" element={<Editor />} />
+        <Route path="/filemanage" element={<FileManage />} />
 
       </Routes>
     </Router>
