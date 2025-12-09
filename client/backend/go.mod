@@ -1,8 +1,6 @@
-module hidemeserver
+module backend
 
 go 1.25.5
-
-require tailscale.com v1.92.1
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
@@ -19,7 +17,6 @@ require (
 	github.com/google/btree v1.1.2 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hdevalence/ed25519consensus v0.2.0 // indirect
 	github.com/jsimonetti/rtnetlink v1.4.0 // indirect
@@ -52,4 +49,5 @@ require (
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 	golang.zx2c4.com/wireguard/windows v0.5.3 // indirect
 	gvisor.dev/gvisor v0.0.0-20250205023644-9414b50a5633 // indirect
+	tailscale.com v1.92.1 // indirect
 )

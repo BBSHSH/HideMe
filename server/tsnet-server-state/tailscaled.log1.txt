@@ -1,0 +1,4 @@
+{"logtail":{"client_time":"2025-12-09T17:04:41.1901092Z"},"text":"magicsock: derp-7 does not know about peer [DLzYl], removing route"}
+{"logtail":{"client_time":"2025-12-09T17:04:42.0022619Z"},"v":2,"text":"wg: [DLzYl] - Handshake did not complete after 5 seconds, retrying (try 2)"}
+{"logtail":{"client_time":"2025-12-09T17:04:42.0022619Z"},"v":2,"text":"wg: [DLzYl] - Sending handshake initiation"}
+{"logtail":{"client_time":"2025-12-09T17:04:42.2405596Z"},"text":"logger closing down\n"}

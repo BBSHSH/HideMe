@@ -1,0 +1,2 @@
+go run main.go -hostname chat-client -server "server-ip" -port 9000
+go run main.go -hostname chat-server

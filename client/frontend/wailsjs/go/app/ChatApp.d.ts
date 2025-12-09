@@ -3,16 +3,26 @@
 import {app} from '../models';
 import {context} from '../models';
 
+export function CheckConnection():Promise<void>;
+
 export function ConnectWebSocket():Promise<void>;
 
 export function Disconnect():Promise<void>;
 
 export function GetMessages(arg1:string):Promise<Array<app.Message>>;
 
+export function GetUserID():Promise<string>;
+
+export function GetUserName():Promise<string>;
+
 export function GetUsers():Promise<Array<app.User>>;
 
-export function RegisterUser(arg1:string):Promise<void>;
+export function MarkAsRead(arg1:string,arg2:string):Promise<void>;
 
 export function SendMessage(arg1:string,arg2:string):Promise<void>;
+
+export function SetUserName(arg1:string):Promise<void>;
+
+export function Shutdown(arg1:context.Context):Promise<void>;
 
 export function Startup(arg1:context.Context):Promise<void>;
