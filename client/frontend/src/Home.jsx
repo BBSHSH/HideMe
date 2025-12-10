@@ -29,16 +29,16 @@ export default function Home() {
       <Header />
       <div className="home-container">
         {/* Hero Section */}
-        <section className="hero-section">
+        {/* <section className="hero-section">
           <div className="hero-content">
-            <h1 className="hero-title">おかえりなさい 👋</h1>
-            <p className="hero-subtitle">今日も素晴らしい一日を始めましょう</p>
+            <h1 className="hero-title">小林バカ野郎</h1>
+            <p className="hero-subtitle">今日は何しよう</p>
           </div>
           <div className="hero-time">
             <div className="current-time">{new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}</div>
             <div className="current-date">{new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}</div>
           </div>
-        </section>
+        </section> */}
 
         {/* Stats Cards */}
         <section className="stats-section">

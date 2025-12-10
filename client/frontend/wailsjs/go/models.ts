@@ -6,6 +6,7 @@ export namespace app {
 	    startTime: number;
 	    endTime: number;
 	    volume: number;
+	    resolution: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ExportOptions(source);
@@ -18,6 +19,7 @@ export namespace app {
 	        this.startTime = source["startTime"];
 	        this.endTime = source["endTime"];
 	        this.volume = source["volume"];
+	        this.resolution = source["resolution"];
 	    }
 	}
 	export class Message {

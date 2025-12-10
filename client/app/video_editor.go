@@ -34,6 +34,7 @@ type ExportOptions struct {
 	StartTime  float64 `json:"startTime"`
 	EndTime    float64 `json:"endTime"`
 	Volume     float64 `json:"volume"`
+	Resolution string  `json:"resolution"`
 }
 
 func NewVideoEditorApp() *VideoEditorApp {
@@ -215,6 +216,20 @@ func (v *VideoEditorApp) ExportVideo(options ExportOptions) error {
 		args = append(args, "-af", fmt.Sprintf("volume=%.2f", options.Volume))
 	}
 
+	// 解像度設定
+	var scale string
+	switch options.Resolution {
+	case "1080p":
+		scale = "1920:1080"
+	case "720p":
+		scale = "1280:720"
+	case "480p":
+		scale = "854:480"
+	default:
+		scale = "1280:720"
+	}
+	args = append(args, "-vf", "scale="+scale)
+
 	args = append(args, "-c:v", "h264_nvenc", "-preset", "fast", "-c:a", "aac", "-b:a", "192k", "-y", options.OutputPath)
 
 	cmd := exec.Command(v.ffmpegPath, args...)
@@ -226,7 +241,6 @@ func (v *VideoEditorApp) ExportVideo(options ExportOptions) error {
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
-		// CPU encoding fallback
 		args[len(args)-8] = "libx264"
 		cmd = exec.Command(v.ffmpegPath, args...)
 		cmd.SysProcAttr = &syscall.SysProcAttr{
@@ -234,7 +248,6 @@ func (v *VideoEditorApp) ExportVideo(options ExportOptions) error {
 			CreationFlags: 0x08000000,
 		}
 		output, err = cmd.CombinedOutput()
-
 		if err != nil {
 			return fmt.Errorf("エンコードエラー: %v\n%s", err, string(output))
 		}
