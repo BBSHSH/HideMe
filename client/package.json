@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@wailsio/runtime": "^3.0.0-alpha.75",
     "react-router-dom": "^7.9.6"
   }
 }

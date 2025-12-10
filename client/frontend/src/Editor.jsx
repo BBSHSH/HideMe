@@ -16,6 +16,7 @@ function App() {
   const [status, setStatus] = useState('動画ファイルを選択してください');
   const [isDraggingStart, setIsDraggingStart] = useState(false);
   const [isDraggingEnd, setIsDraggingEnd] = useState(false);
+  const [resolution, setResolution] = useState('720p');
 
   const videoRef = useRef(null);
   const timelineRef = useRef(null);
@@ -386,13 +387,6 @@ function App() {
           </div>
 
           <div className="controls">
-            <button
-              className="btn btn-play"
-              onClick={handlePlayPause}
-              disabled={!videoInfo}
-            >
-              {isPlaying ? '停止' : '再生'}
-            </button>
             <button className="btn" onClick={resetRange} disabled={!videoInfo}>
               範囲リセット
             </button>
@@ -421,7 +415,16 @@ function App() {
               </label>
             </div>
           </div>
-
+          <div className="resolution-section">
+            <label>
+              <h3>解像度</h3>
+              <select value={resolution} onChange={(e) => setResolution(e.target.value)}>
+                <option value="1080p">1080p</option>
+                <option value="720p">720p</option>
+                <option value="480p">480p</option>
+              </select>
+            </label>
+          </div>
           <div className="export-section">
             <button
               className="btn btn-export"

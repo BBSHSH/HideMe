@@ -483,7 +483,6 @@ export default function Chat() {
               ログイン中:  {currentUser?.name}
             </div>
             <div className="search-container">
-              <span className="search-icon">🔍</span>
               <input
                 type="text"
                 placeholder="会話を検索"
