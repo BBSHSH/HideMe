@@ -281,7 +281,7 @@ func (s *ChatServer) handleWSMessage(fromUserID string, wsMsg WSMessage) {
 	case "disconnect":
 		s.updateUserStatus(fromUserID, "offline")
 	case "ping":
-		// クライアントからのpingは無視（pongは自動で送られる）
+		// クライアントからのpingは無視
 	}
 }
 

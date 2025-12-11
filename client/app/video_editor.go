@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -68,7 +69,7 @@ func (v *VideoEditorApp) SelectFile() (string, error) {
 		Filters: []runtime.FileFilter{
 			{
 				DisplayName: "動画ファイル",
-				Pattern:     "*.mp4;*.mov;*.mkv;*.avi",
+				Pattern:     "*. mp4;*.mov;*.mkv;*.avi",
 			},
 		},
 	}
@@ -89,7 +90,15 @@ func (v *VideoEditorApp) GetVideoServerURL() string {
 	return fmt.Sprintf("http://localhost:%s", v.videoPort)
 }
 
-// VideoHandler serves video files
+// GetLocalFileURL returns the local file URL for the AssetServer
+// フロントエンドから呼び出して、ローカルファイルのURLを取得する
+func (v *VideoEditorApp) GetLocalFileURL(filePath string) string {
+	encodedPath := url.PathEscape(filePath)
+	// Windows のドライブレター対応 (C:  -> C%3A だが、PathEscapeは :  をエスケープしない)
+	return fmt.Sprintf("/localfile/%s", encodedPath)
+}
+
+// VideoHandler serves video files (従来のHTTPサーバー用 - 互換性のため残す)
 func (v *VideoEditorApp) VideoHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
@@ -137,7 +146,7 @@ func (v *VideoEditorApp) GetVideoInfo(inputPath string) (*VideoInfo, error) {
 	}
 
 	if _, err := os.Stat(inputPath); err != nil {
-		return nil, fmt.Errorf("video file not found: %v", err)
+		return nil, fmt.Errorf("video file not found:  %v", err)
 	}
 
 	args := []string{"-i", inputPath, "-f", "null", "-"}
@@ -201,22 +210,19 @@ func (v *VideoEditorApp) GetVideoInfo(inputPath string) (*VideoInfo, error) {
 func (v *VideoEditorApp) ExportVideo(options ExportOptions) error {
 	fmt.Printf("Exporting video: %+v\n", options)
 
-	args := []string{"-i", options.InputPath}
+	// 共通の基本オプションを構築
+	baseArgs := []string{"-i", options.InputPath}
 
 	if options.StartTime > 0 {
-		args = append(args, "-ss", fmt.Sprintf("%.2f", options.StartTime))
+		baseArgs = append(baseArgs, "-ss", fmt.Sprintf("%.2f", options.StartTime))
 	}
 
 	if options.EndTime > 0 {
 		duration := options.EndTime - options.StartTime
-		args = append(args, "-t", fmt.Sprintf("%.2f", duration))
+		baseArgs = append(baseArgs, "-t", fmt.Sprintf("%. 2f", duration))
 	}
 
-	if options.Volume != 1.0 {
-		args = append(args, "-af", fmt.Sprintf("volume=%.2f", options.Volume))
-	}
-
-	// 解像度設定
+	// 解像度設定（ビデオフィルター）
 	var scale string
 	switch options.Resolution {
 	case "1080p":
@@ -228,9 +234,25 @@ func (v *VideoEditorApp) ExportVideo(options ExportOptions) error {
 	default:
 		scale = "1280:720"
 	}
-	args = append(args, "-vf", "scale="+scale)
+	baseArgs = append(baseArgs, "-vf", fmt.Sprintf("scale=%s:flags=lanczos", scale))
 
-	args = append(args, "-c:v", "h264_nvenc", "-preset", "fast", "-c:a", "aac", "-b:a", "192k", "-y", options.OutputPath)
+	// 音量設定（オーディオフィルター）
+	if options.Volume != 1.0 {
+		baseArgs = append(baseArgs, "-af", fmt.Sprintf("volume=%.2f", options.Volume))
+	}
+
+	// シンプルで確実なエンコード設定
+	args := append([]string{}, baseArgs...)
+	args = append(args,
+		"-c:v", "libx264",
+		"-profile:v", "baseline",
+		"-level", "3.0",
+		"-pix_fmt", "yuv420p",
+		"-c:a", "aac",
+		"-ar", "44100",
+		"-b:a", "128k",
+		"-movflags", "+faststart",
+		"-y", options.OutputPath)
 
 	cmd := exec.Command(v.ffmpegPath, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
@@ -241,16 +263,7 @@ func (v *VideoEditorApp) ExportVideo(options ExportOptions) error {
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
-		args[len(args)-8] = "libx264"
-		cmd = exec.Command(v.ffmpegPath, args...)
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			HideWindow:    true,
-			CreationFlags: 0x08000000,
-		}
-		output, err = cmd.CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("エンコードエラー: %v\n%s", err, string(output))
-		}
+		return fmt.Errorf("エンコードエラー: %v\n%s", err, string(output))
 	}
 
 	fmt.Printf("Export completed\n")
@@ -273,4 +286,129 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// =============================================================================
+// LocalFileLoader - Wails AssetServer Handler
+// ローカルファイルシステムから直接ファイルを提供するためのハンドラー
+// =============================================================================
+
+// LocalFileLoader implements http.Handler for serving local files
+type LocalFileLoader struct{}
+
+// NewLocalFileLoader creates a new LocalFileLoader instance
+func NewLocalFileLoader() *LocalFileLoader {
+	return &LocalFileLoader{}
+}
+
+// ServeHTTP handles HTTP requests for local files
+// /localfile/ プレフィックスでローカルファイルにアクセス可能
+func (l *LocalFileLoader) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// /localfile/ プレフィックスをチェック
+	if !strings.HasPrefix(r.URL.Path, "/localfile/") {
+		// このハンドラーで処理しないリクエストは404を返す
+		// (Wailsの埋め込みアセットが優先される)
+		return
+	}
+
+	// パスからプレフィックスを除去
+	encodedPath := strings.TrimPrefix(r.URL.Path, "/localfile/")
+
+	// URLデコード
+	filePath, err := url.PathUnescape(encodedPath)
+	if err != nil {
+		fmt.Printf("LocalFileLoader: Failed to decode path: %v\n", err)
+		http.Error(w, "Invalid path encoding", http.StatusBadRequest)
+		return
+	}
+
+	// Windows パスの正規化
+	// スラッシュをバックスラッシュに変換（Windowsの場合）
+	filePath = filepath.FromSlash(filePath)
+
+	fmt.Printf("LocalFileLoader: Serving file: %s\n", filePath)
+
+	// ファイルの存在確認
+	fileInfo, err := os.Stat(filePath)
+	if os.IsNotExist(err) {
+		fmt.Printf("LocalFileLoader: File not found: %s\n", filePath)
+		http.Error(w, "File not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		fmt.Printf("LocalFileLoader: Error accessing file: %v\n", err)
+		http.Error(w, "Error accessing file", http.StatusInternalServerError)
+		return
+	}
+
+	// ディレクトリへのアクセスは拒否
+	if fileInfo.IsDir() {
+		fmt.Printf("LocalFileLoader: Directory access denied: %s\n", filePath)
+		http.Error(w, "Directory access not allowed", http.StatusForbidden)
+		return
+	}
+
+	// Content-Type を拡張子から判定
+	ext := strings.ToLower(filepath.Ext(filePath))
+	contentType := getContentType(ext)
+
+	// レスポンスヘッダーの設定
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Accept-Ranges", "bytes")
+	w.Header().Set("Cache-Control", "no-cache")
+
+	// ファイルを提供（Range リクエストにも対応）
+	http.ServeFile(w, r, filePath)
+}
+
+// getContentType returns the MIME type for a file extension
+func getContentType(ext string) string {
+	mimeTypes := map[string]string{
+		// 動画
+		".mp4":  "video/mp4",
+		".mov":  "video/quicktime",
+		".mkv":  "video/x-matroska",
+		".avi":  "video/x-msvideo",
+		".webm": "video/webm",
+		". m4v": "video/x-m4v",
+		". wmv": "video/x-ms-wmv",
+		". flv": "video/x-flv",
+		".ogv":  "video/ogg",
+		".3gp":  "video/3gpp",
+
+		// 音声
+		".mp3":  "audio/mpeg",
+		".wav":  "audio/wav",
+		".ogg":  "audio/ogg",
+		".m4a":  "audio/mp4",
+		".aac":  "audio/aac",
+		".flac": "audio/flac",
+		". wma": "audio/x-ms-wma",
+
+		// 画像
+		".jpg":  "image/jpeg",
+		".jpeg": "image/jpeg",
+		".png":  "image/png",
+		".gif":  "image/gif",
+		".webp": "image/webp",
+		".bmp":  "image/bmp",
+		".svg":  "image/svg+xml",
+		".ico":  "image/x-icon",
+
+		// その他
+		".json": "application/json",
+		". xml": "application/xml",
+		".pdf":  "application/pdf",
+		".txt":  "text/plain",
+		".html": "text/html",
+		".css":  "text/css",
+		".js":   "application/javascript",
+	}
+
+	if mimeType, ok := mimeTypes[ext]; ok {
+		return mimeType
+	}
+
+	// デフォルト
+	return "application/octet-stream"
 }

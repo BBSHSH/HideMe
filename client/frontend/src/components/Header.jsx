@@ -11,16 +11,44 @@ export default function Header() {
       </div>
 
       <nav className="nav-buttons">
-        <NavLink to="/" className={({ isActive }) => isActive ? 'nav-btn active' : 'nav-btn'}>ホーム</NavLink>
-        <NavLink to="/chat" className={({ isActive }) => isActive ? 'nav-btn active' : 'nav-btn'}>チャット</NavLink>
-        <NavLink to="/file" className={({ isActive }) => isActive ? 'nav-btn active' : 'nav-btn'}>ファイル</NavLink>
-        <NavLink to="/editor" className={({ isActive }) => isActive ? 'nav-btn active' : 'nav-btn'}>動画編集</NavLink>
-        <NavLink to="/filemanage" className={({ isActive }) => isActive ? 'nav-btn active' : 'nav-btn'}>管理</NavLink>
+        <NavLink 
+          to="/" 
+          className={({ isActive }) => isActive ? 'nav-btn active' : 'nav-btn'}
+        >
+          ホーム
+        </NavLink>
 
+        <NavLink 
+          to="/chat" 
+          className={({ isActive }) => isActive ? 'nav-btn active' : 'nav-btn'}
+        >
+          チャット
+        </NavLink>
+
+        <NavLink 
+          to="/file" 
+          className={({ isActive }) => isActive ? 'nav-btn active' : 'nav-btn'}
+        >
+          ファイル
+        </NavLink>
+
+        <NavLink 
+          to="/editor" 
+          className={({ isActive }) => isActive ? 'nav-btn active' : 'nav-btn'}
+        >
+          動画編集
+        </NavLink>
+
+        <NavLink 
+          to="/filemanage" 
+          className={({ isActive }) => isActive ? 'nav-btn active' : 'nav-btn'}
+        >
+          管理
+        </NavLink>
       </nav>
 
       <div className="profile-button">
-        <img className="profile-avatar" src="../src/assets/images/profile.png" alt="あなた" />
+        <img className="profile-avatar" src="../src/assets/images/koba.jpg" alt="あなた" />
       </div>
     </header>
   );
