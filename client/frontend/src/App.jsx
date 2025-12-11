@@ -46,7 +46,7 @@ export default function App() {
               tsnetがオフラインか、ネットワークに問題があります。<br />
               再接続を試みています...<br /><br />
 
-              時間がたっても解決しない場合は、再いんストールをお試しください。
+              時間がたっても解決しない場合は、再インストールをお試しください。
             </p>
             <div className="overlay-status">
               現在の状態: <b>{connectionStatus}</b>

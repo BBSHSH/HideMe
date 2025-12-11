@@ -6,6 +6,10 @@ export function ExportVideo(arg1) {
   return window['go']['app']['VideoEditorApp']['ExportVideo'](arg1);
 }
 
+export function GetLocalFileURL(arg1) {
+  return window['go']['app']['VideoEditorApp']['GetLocalFileURL'](arg1);
+}
+
 export function GetVideoInfo(arg1) {
   return window['go']['app']['VideoEditorApp']['GetVideoInfo'](arg1);
 }
