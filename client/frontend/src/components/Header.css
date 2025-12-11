@@ -1,3 +1,4 @@
+/* === Header 全体 === */
 .logo-container {
   display: flex;
   align-items: center;
@@ -25,26 +26,79 @@
   padding-right: 10px;
 }
 
+
+/* === Nav Buttons === */
 .nav-buttons {
   display: flex;
   gap: 16px;
 }
 
+/* 基本スタイル */
 .nav-btn {
+  position: relative; /* 中央から下線アニメに必要 */
   color: #ecf0f1;
   text-decoration: none;
   padding: 8px 12px;
   font-weight: 500;
-  border-bottom: 2px solid transparent;
-  transition: all 0.2s;
+  transition: color 0.3s;
 }
 
-.nav-btn:hover {
-  color: #f39c12;
-  border-bottom: 2px solid #f39c12;
+.nav-btn::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+
+  width: 100%;
+  height: 2px;
+  background-color: #f39c12;
+
+  transform: scaleX(0);
+  transform-origin: center;
+
+  /* 最初早く → 最後ゆっくり */
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* hover / active で広がる */
+.nav-btn:hover::after,
+.nav-btn.active::after {
+  transform: scaleX(1);
+}
+
+
+/* ホバー：中央 → 左右へビューン */
+.nav-btn:hover::after {
+  transform: scaleX(1);
+}
+
+/* active：中央 → 左右へビューン */
+.nav-btn.active::after {
+  transform: scaleX(1);
+}
+
+/* hover & active の文字色 */
+.nav-btn:hover,
 .nav-btn.active {
   color: #f39c12;
-  border-bottom: 2px solid #f39c12;
+}
+
+
+/* === Profile === */
+.profile-button {
+  display: flex;
+  align-items: center;
+}
+
+.profile-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+.nav-underline {
+  position: absolute;
+  bottom: 0;
+  height: 2px;
+  background-color: #f39c12;
+  transition: left 0.3s cubic-bezier(0.4,0,0.2,1), width 0.3s cubic-bezier(0.4,0,0.2,1);
 }

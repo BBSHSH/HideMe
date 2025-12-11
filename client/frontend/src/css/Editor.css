@@ -38,6 +38,18 @@ body, html, #root {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  animation: fadeIn 0.5s ease-out;
+
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .left-panel, .right-panel {

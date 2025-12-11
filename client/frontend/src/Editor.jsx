@@ -21,33 +21,37 @@ function App() {
   const videoRef = useRef(null);
   const timelineRef = useRef(null);
 
-  const handleSelect = async () => {
-    try {
-      const file = await SelectFile();
-      if (!file) return;
+// handleSelect 関数内の videoUrl 設定を変更
 
-      console.log('Selected file:', file);
-      setVideoPath(file);
-      setStatus('動画を読み込み中...');
+const handleSelect = async () => {
+  try {
+    const file = await SelectFile();
+    if (!file) return;
 
-      const info = await GetVideoInfo(file);
-      console.log('Video info:', info);
-      setVideoInfo(info);
-      setEndTime(info.duration);
-      setStartTime(0);
-      setCurrentTime(0);
+    console. log('Selected file:', file);
+    setVideoPath(file);
+    setStatus('動画を読み込み中...');
 
-      const videoUrl = `http://127.0.0.1:8082/video?path=${encodeURIComponent(file)}`;
-      console.log('Video URL:', videoUrl);
-      setVideoURL(videoUrl);
+    const info = await GetVideoInfo(file);
+    console.log('Video info:', info);
+    setVideoInfo(info);
+    setEndTime(info. duration);
+    setStartTime(0);
+    setCurrentTime(0);
 
-      setStatus(`動画が読み込まれました (${formatTime(info.duration)})`);
-    } catch (error) {
-      console.error('Error:', error);
-      setStatus(`エラー: ${error}`);
-      alert(`エラー: ${error}`);
-    }
-  };
+    // パスをURLエンコードしてローカルファイルプロトコルで読み込み
+    const encodedPath = encodeURIComponent(file).replace(/%2F/g, '/').replace(/%3A/g, ':');
+    const videoUrl = `/localfile/${encodedPath}`;
+    console.log('Video URL:', videoUrl);
+    setVideoURL(videoUrl);
+
+    setStatus(`動画が読み込まれました (${formatTime(info.duration)})`);
+  } catch (error) {
+    console.error('Error:', error);
+    setStatus(`エラー: ${error}`);
+    alert(`エラー: ${error}`);
+  }
+};
 
   const handlePlayPause = () => {
     if (!videoRef.current) return;
@@ -111,6 +115,7 @@ function App() {
       startTime,
       endTime,
       volume,
+      resolution, // ← これが抜けていた！
     };
 
     try {
@@ -128,11 +133,10 @@ function App() {
   const formatTime = (seconds) => {
     if (seconds == null || isNaN(seconds)) return '00:00.00';
     const mins = Math.floor(seconds / 60);
-    const secs = (seconds % 60).toFixed(2); // 小数2桁
+    const secs = (seconds % 60).toFixed(2);
     const [secInt, secDec] = secs.split('.');
     return `${mins.toString().padStart(2,'0')}:${secInt.padStart(2,'0')}.${secDec}`;
   };
-
 
   const resetRange = () => {
     setStartTime(0);
@@ -142,7 +146,6 @@ function App() {
     }
   };
 
-  // ドラッグハンドラー
   const handleStartDrag = (e, type) => {
     e.stopPropagation();
     if (type === 'start') {
@@ -180,7 +183,6 @@ function App() {
     setIsDraggingEnd(false);
   };
 
-  // グローバルマウスイベント
   useEffect(() => {
     if (isDraggingStart || isDraggingEnd) {
       window.addEventListener('mousemove', handleDragMove);
@@ -193,7 +195,6 @@ function App() {
     }
   }, [isDraggingStart, isDraggingEnd, startTime, endTime, videoInfo]);
 
-  // 動画の時間更新を監視
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -201,7 +202,6 @@ function App() {
     const handleTimeUpdate = () => {
       setCurrentTime(video.currentTime);
       
-      // 終了位置に達したら停止
       if (video.currentTime >= endTime && endTime > 0) {
         video.pause();
         setIsPlaying(false);
@@ -224,34 +224,12 @@ function App() {
     };
   }, [endTime, startTime]);
 
-  // 音量を設定
   useEffect(() => {
     if (videoRef.current) {
       videoRef.current.volume = volume;
     }
   }, [volume]);
 
-  // タイムラインの位置計算
-  const getTimelinePosition = (time) => {
-    if (!videoInfo || !videoInfo.duration) return 0;
-    return (time / videoInfo.duration) * 100;
-  };
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.code === "Space") {
-        e.preventDefault(); // スクロール防止
-        handlePlayPause();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isPlaying, startTime, endTime, videoRef]);
-
-  //キーボード操作
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (!videoRef.current) return;
@@ -261,19 +239,16 @@ function App() {
           e.preventDefault();
           handlePlayPause();
           break;
-          //十字キー左で5秒戻り
         case "ArrowLeft":
           e.preventDefault();
           videoRef.current.currentTime = Math.max(startTime, videoRef.current.currentTime - 5);
           setCurrentTime(videoRef.current.currentTime);
           break;
-          //十字キー右で5秒送り
         case "ArrowRight":
           e.preventDefault();
           videoRef.current.currentTime = Math.min(endTime, videoRef.current.currentTime + 5);
           setCurrentTime(videoRef.current.currentTime);
           break;
-          // 十字キー上で音量アップ
         case "ArrowUp":
           e.preventDefault();
           setVolume((prev) => {
@@ -282,7 +257,6 @@ function App() {
             return newVol;
           });
           break;
-          // 十字キー下で音量ダウン
         case "ArrowDown":
           e.preventDefault();
           setVolume((prev) => {
@@ -298,32 +272,39 @@ function App() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [startTime, endTime, videoRef]);
+  }, [startTime, endTime, isPlaying]);
+
+  const getTimelinePosition = (time) => {
+    if (!videoInfo || !videoInfo.duration) return 0;
+    return (time / videoInfo.duration) * 100;
+  };
 
   return (
     <div className="app">
       <Header/>
       <div className="main-container">
         <div className="left-panel">
-            <div className="preview-container" onClick={!videoURL ? handleSelect : undefined}>
+          <div
+            className="preview-container"
+            onClick={videoURL ? handlePlayPause : handleSelect}
+          >
             {videoURL ? (
-                <video
+              <video
                 ref={videoRef}
                 src={videoURL}
                 className="preview-video"
                 onError={(e) => {
-                    console.error('Video error:', e);
-                    setStatus('動画の読み込みに失敗しました');
+                  console.error('Video error:', e);
+                  setStatus('動画の読み込みに失敗しました');
                 }}
                 controls={false}
-                />
+              />
             ) : (
-                <div className="preview-placeholder">
+              <div className="preview-placeholder">
                 <p>クリックして動画を選択</p>
-                </div>
+              </div>
             )}
-            </div>
-
+          </div>
           <div className="timeline-container">
             <div className="time-labels">
               <span>{formatTime(startTime)}</span>
@@ -336,10 +317,8 @@ function App() {
               className="integrated-timeline"
               onClick={handleTimelineClick}
             >
-              {/* 背景バー */}
               <div className="timeline-track"></div>
               
-              {/* 選択範囲 */}
               <div 
                 className="timeline-range"
                 style={{
@@ -348,7 +327,6 @@ function App() {
                 }}
               ></div>
               
-              {/* 再生位置インジケーター */}
               {videoInfo && currentTime >= startTime && currentTime <= endTime && (
                 <div 
                   className="timeline-current"
@@ -358,7 +336,6 @@ function App() {
                 ></div>
               )}
               
-              {/* 開始ハンドル */}
               <div 
                 className="timeline-handle timeline-handle-start"
                 style={{
@@ -369,7 +346,6 @@ function App() {
                 <div className="handle-grip"></div>
               </div>
               
-              {/* 終了ハンドル */}
               <div 
                 className="timeline-handle timeline-handle-end"
                 style={{
