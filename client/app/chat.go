@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -13,7 +14,6 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-// ChatApp はチャットアプリケーションのメインクラス
 type ChatApp struct {
 	ctx        context.Context
 	wsConn     *websocket.Conn
@@ -23,7 +23,6 @@ type ChatApp struct {
 	httpClient *http.Client
 }
 
-// User ユーザー情報
 type User struct {
 	ID       string    `json:"id"`
 	Name     string    `json:"name"`
@@ -32,24 +31,44 @@ type User struct {
 	LastSeen time.Time `json:"lastSeen"`
 }
 
-// Message メッセージ情報
+type Group struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Avatar      string    `json:"avatar"`
+	Members     []string  `json:"members"`
+	CreatedBy   string    `json:"createdBy"`
+	CreatedAt   time.Time `json:"createdAt"`
+	Description string    `json:"description"`
+}
+
 type Message struct {
 	ID        string    `json:"id"`
 	FromID    string    `json:"fromId"`
 	ToID      string    `json:"toId"`
+	GroupID   string    `json:"groupId,omitempty"`
 	Content   string    `json:"content"`
 	Type      string    `json:"type"`
 	Timestamp time.Time `json:"timestamp"`
 	Read      bool      `json:"read"`
 }
 
-// WSMessage WebSocket経由のメッセージ
+type Call struct {
+	ID            string                 `json:"id"`
+	CallerID      string                 `json:"callerId"`
+	CalleeID      string                 `json:"calleeId"`
+	GroupID       string                 `json:"groupId,omitempty"`
+	Type          string                 `json:"type"`
+	Status        string                 `json:"status"`
+	StartTime     time.Time              `json:"startTime"`
+	Participants  []string               `json:"participants"`
+	SignalingData map[string]interface{} `json:"signalingData,omitempty"`
+}
+
 type WSMessage struct {
 	Type    string      `json:"type"`
 	Payload interface{} `json:"payload"`
 }
 
-// NewChatApp ChatAppの新規作成
 func NewChatApp() *ChatApp {
 	return &ChatApp{
 		tsnetURL: "http://localhost:9000",
@@ -59,12 +78,10 @@ func NewChatApp() *ChatApp {
 	}
 }
 
-// Startup アプリケーション起動時の初期化
 func (c *ChatApp) Startup(ctx context.Context) {
 	c.ctx = ctx
 }
 
-// CheckConnection tsnetプロキシへの接続確認
 func (c *ChatApp) CheckConnection() error {
 	resp, err := c.httpClient.Get(c.tsnetURL + "/health")
 	if err != nil {
@@ -73,29 +90,24 @@ func (c *ChatApp) CheckConnection() error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("tsnetプロキシが正常に応答しません:  status %d", resp.StatusCode)
+		return fmt.Errorf("tsnetプロキシが正常に応答しません: status %d", resp.StatusCode)
 	}
 
 	return nil
 }
 
-// SetUserName ユーザー名を設定（ローカルのみ、サーバー登録なし）
 func (c *ChatApp) SetUserName(name string) error {
-	// まずtsnetプロキシへの接続を確認
 	if err := c.CheckConnection(); err != nil {
 		return err
 	}
 
-	// ローカルでユーザー情報を設定
 	c.userID = uuid.New().String()
 	c.userName = name
 
 	return nil
 }
 
-// ConnectWebSocket WebSocket接続
 func (c *ChatApp) ConnectWebSocket() error {
-	// ユーザー名をクエリパラメータに含める
 	wsURL := fmt.Sprintf("ws://localhost:9000/ws?userId=%s&userName=%s", c.userID, c.userName)
 
 	dialer := websocket.Dialer{
@@ -115,7 +127,6 @@ func (c *ChatApp) ConnectWebSocket() error {
 	return nil
 }
 
-// keepAlive コネクション維持用のPing送信
 func (c *ChatApp) keepAlive() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -134,7 +145,6 @@ func (c *ChatApp) keepAlive() {
 	}
 }
 
-// receiveMessages WebSocketからのメッセージ受信
 func (c *ChatApp) receiveMessages() {
 	defer func() {
 		if r := recover(); r != nil {
@@ -161,7 +171,6 @@ func (c *ChatApp) receiveMessages() {
 	}
 }
 
-// emitEvent フロントエンドにイベントを送信
 func (c *ChatApp) emitEvent(eventType string, payload interface{}) {
 	if c.ctx == nil {
 		return
@@ -169,11 +178,10 @@ func (c *ChatApp) emitEvent(eventType string, payload interface{}) {
 	runtime.EventsEmit(c.ctx, eventType, payload)
 }
 
-// reconnect 再接続処理
 func (c *ChatApp) reconnect() {
 	for i := 0; i < 5; i++ {
 		time.Sleep(time.Duration(i+1) * 2 * time.Second)
-		fmt.Printf("再接続試行 %d/5.. .\n", i+1)
+		fmt.Printf("再接続試行 %d/5...\n", i+1)
 
 		if err := c.ConnectWebSocket(); err == nil {
 			fmt.Println("再接続成功")
@@ -184,7 +192,6 @@ func (c *ChatApp) reconnect() {
 	c.emitEvent("connection_lost", nil)
 }
 
-// SendMessage メッセージ送信
 func (c *ChatApp) SendMessage(toID, content string) error {
 	if c.wsConn == nil {
 		return fmt.Errorf("WebSocketが接続されていません")
@@ -209,7 +216,30 @@ func (c *ChatApp) SendMessage(toID, content string) error {
 	return nil
 }
 
-// MarkAsRead 既読を送信
+func (c *ChatApp) SendGroupMessage(groupID, content string) error {
+	if c.wsConn == nil {
+		return fmt.Errorf("WebSocketが接続されていません")
+	}
+
+	msg := map[string]string{
+		"fromId":  c.userID,
+		"groupId": groupID,
+		"content": content,
+		"type":    "text",
+	}
+
+	wsMsg := WSMessage{
+		Type:    "group_message",
+		Payload: msg,
+	}
+
+	if err := c.wsConn.WriteJSON(wsMsg); err != nil {
+		return fmt.Errorf("グループメッセージ送信エラー: %v", err)
+	}
+
+	return nil
+}
+
 func (c *ChatApp) MarkAsRead(messageID, otherID string) error {
 	if c.wsConn == nil {
 		return fmt.Errorf("WebSocketが接続されていません")
@@ -233,7 +263,100 @@ func (c *ChatApp) MarkAsRead(messageID, otherID string) error {
 	return nil
 }
 
-// GetUsers ユーザー一覧取得
+func (c *ChatApp) InitiateCall(calleeID, callType string) error {
+	if c.wsConn == nil {
+		return fmt.Errorf("WebSocketが接続されていません")
+	}
+
+	callData := map[string]string{
+		"calleeId": calleeID,
+		"type":     callType,
+	}
+
+	wsMsg := WSMessage{
+		Type:    "call_initiate",
+		Payload: callData,
+	}
+
+	if err := c.wsConn.WriteJSON(wsMsg); err != nil {
+		return fmt.Errorf("通話開始エラー: %v", err)
+	}
+
+	return nil
+}
+
+func (c *ChatApp) AnswerCall(callID string) error {
+	if c.wsConn == nil {
+		return fmt.Errorf("WebSocketが接続されていません")
+	}
+
+	wsMsg := WSMessage{
+		Type:    "call_answer",
+		Payload: map[string]string{"callId": callID},
+	}
+
+	if err := c.wsConn.WriteJSON(wsMsg); err != nil {
+		return fmt.Errorf("通話応答エラー: %v", err)
+	}
+
+	return nil
+}
+
+func (c *ChatApp) RejectCall(callID string) error {
+	if c.wsConn == nil {
+		return fmt.Errorf("WebSocketが接続されていません")
+	}
+
+	wsMsg := WSMessage{
+		Type:    "call_reject",
+		Payload: map[string]string{"callId": callID},
+	}
+
+	if err := c.wsConn.WriteJSON(wsMsg); err != nil {
+		return fmt.Errorf("通話拒否エラー: %v", err)
+	}
+
+	return nil
+}
+
+func (c *ChatApp) EndCall(callID string) error {
+	if c.wsConn == nil {
+		return fmt.Errorf("WebSocketが接続されていません")
+	}
+
+	wsMsg := WSMessage{
+		Type:    "call_end",
+		Payload: map[string]string{"callId": callID},
+	}
+
+	if err := c.wsConn.WriteJSON(wsMsg); err != nil {
+		return fmt.Errorf("通話終了エラー: %v", err)
+	}
+
+	return nil
+}
+
+func (c *ChatApp) SendWebRTCSignal(callID, toID string, signal map[string]interface{}) error {
+	if c.wsConn == nil {
+		return fmt.Errorf("WebSocketが接続されていません")
+	}
+
+	wsMsg := WSMessage{
+		Type: "webrtc_signal",
+		Payload: map[string]interface{}{
+			"callId": callID,
+			"toId":   toID,
+			"signal": signal,
+		},
+	}
+
+	if err := c.wsConn.WriteJSON(wsMsg); err != nil {
+		return fmt.Errorf("WebRTCシグナル送信エラー: %v", err)
+	}
+
+	return nil
+}
+
 func (c *ChatApp) GetUsers() ([]User, error) {
 	resp, err := c.httpClient.Get(c.tsnetURL + "/api/users")
 	if err != nil {
@@ -251,7 +374,6 @@ func (c *ChatApp) GetUsers() ([]User, error) {
 		return nil, fmt.Errorf("ユーザーデコードエラー: %v", err)
 	}
 
-	// 自分自身を除外
 	filteredUsers := make([]User, 0)
 	for _, user := range users {
 		if user.ID != c.userID {
@@ -262,9 +384,59 @@ func (c *ChatApp) GetUsers() ([]User, error) {
 	return filteredUsers, nil
 }
 
-// GetMessages メッセージ履歴取得
+func (c *ChatApp) GetGroups() ([]Group, error) {
+	url := fmt.Sprintf("%s/api/groups?userId=%s", c.tsnetURL, c.userID)
+	resp, err := c.httpClient.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("グループ取得エラー: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("グループ取得失敗")
+	}
+
+	var groups []Group
+	if err := json.NewDecoder(resp.Body).Decode(&groups); err != nil {
+		return nil, fmt.Errorf("グループデコードエラー: %v", err)
+	}
+
+	return groups, nil
+}
+
+func (c *ChatApp) CreateGroup(name, description string, members []string) (*Group, error) {
+	reqBody := map[string]interface{}{
+		"name":        name,
+		"description": description,
+		"members":     append(members, c.userID),
+		"createdBy":   c.userID,
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.httpClient.Post(c.tsnetURL+"/api/groups/create", "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("グループ作成エラー: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("グループ作成失敗")
+	}
+
+	var group Group
+	if err := json.NewDecoder(resp.Body).Decode(&group); err != nil {
+		return nil, err
+	}
+
+	return &group, nil
+}
+
 func (c *ChatApp) GetMessages(otherUserID string) ([]Message, error) {
-	url := fmt.Sprintf("%s/api/messages? userId=%s&otherUserId=%s", c.tsnetURL, c.userID, otherUserID)
+	url := fmt.Sprintf("%s/api/messages?userId=%s&otherUserId=%s", c.tsnetURL, c.userID, otherUserID)
 
 	resp, err := c.httpClient.Get(url)
 	if err != nil {
@@ -293,17 +465,43 @@ func (c *ChatApp) GetMessages(otherUserID string) ([]Message, error) {
 	return messages, nil
 }
 
-// GetUserID 現在のユーザーIDを取得
+func (c *ChatApp) GetGroupMessages(groupID string) ([]Message, error) {
+	url := fmt.Sprintf("%s/api/groups/messages?groupId=%s", c.tsnetURL, groupID)
+
+	resp, err := c.httpClient.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("グループメッセージ取得エラー: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("グループメッセージ取得失敗")
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+
+	var messages []Message
+	if len(body) > 0 && string(body) != "null" {
+		if err := json.Unmarshal(body, &messages); err != nil {
+			return nil, err
+		}
+	}
+
+	if messages == nil {
+		messages = []Message{}
+	}
+
+	return messages, nil
+}
+
 func (c *ChatApp) GetUserID() string {
 	return c.userID
 }
 
-// GetUserName 現在のユーザー名を取得
 func (c *ChatApp) GetUserName() string {
 	return c.userName
 }
 
-// Disconnect 切断処理
 func (c *ChatApp) Disconnect() {
 	if c.wsConn != nil {
 		wsMsg := WSMessage{
@@ -318,7 +516,6 @@ func (c *ChatApp) Disconnect() {
 	}
 }
 
-// Shutdown アプリケーション終了時の処理
 func (c *ChatApp) Shutdown(ctx context.Context) {
 	c.Disconnect()
 }

@@ -6,6 +6,8 @@ import {http} from '../models';
 
 export function ExportVideo(arg1:app.ExportOptions):Promise<void>;
 
+export function GetLocalFileURL(arg1:string):Promise<string>;
+
 export function GetVideoInfo(arg1:string):Promise<app.VideoInfo>;
 
 export function GetVideoServerURL():Promise<string>;

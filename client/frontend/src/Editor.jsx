@@ -21,37 +21,33 @@ function App() {
   const videoRef = useRef(null);
   const timelineRef = useRef(null);
 
-// handleSelect 関数内の videoUrl 設定を変更
+  const handleSelect = async () => {
+    try {
+      const file = await SelectFile();
+      if (!file) return;
 
-const handleSelect = async () => {
-  try {
-    const file = await SelectFile();
-    if (!file) return;
+      console.log('Selected file:', file);
+      setVideoPath(file);
+      setStatus('動画を読み込み中...');
 
-    console. log('Selected file:', file);
-    setVideoPath(file);
-    setStatus('動画を読み込み中...');
+      const info = await GetVideoInfo(file);
+      console.log('Video info:', info);
+      setVideoInfo(info);
+      setEndTime(info.duration);
+      setStartTime(0);
+      setCurrentTime(0);
 
-    const info = await GetVideoInfo(file);
-    console.log('Video info:', info);
-    setVideoInfo(info);
-    setEndTime(info. duration);
-    setStartTime(0);
-    setCurrentTime(0);
+      const videoUrl = `http://127.0.0.1:8082/video?path=${encodeURIComponent(file)}`;
+      console.log('Video URL:', videoUrl);
+      setVideoURL(videoUrl);
 
-    // パスをURLエンコードしてローカルファイルプロトコルで読み込み
-    const encodedPath = encodeURIComponent(file).replace(/%2F/g, '/').replace(/%3A/g, ':');
-    const videoUrl = `/localfile/${encodedPath}`;
-    console.log('Video URL:', videoUrl);
-    setVideoURL(videoUrl);
-
-    setStatus(`動画が読み込まれました (${formatTime(info.duration)})`);
-  } catch (error) {
-    console.error('Error:', error);
-    setStatus(`エラー: ${error}`);
-    alert(`エラー: ${error}`);
-  }
-};
+      setStatus(`動画が読み込まれました (${formatTime(info.duration)})`);
+    } catch (error) {
+      console.error('Error:', error);
+      setStatus(`エラー: ${error}`);
+      alert(`エラー: ${error}`);
+    }
+  };
 
   const handlePlayPause = () => {
     if (!videoRef.current) return;
@@ -421,3 +417,4 @@ const handleSelect = async () => {
 }
 
 export default App;
+

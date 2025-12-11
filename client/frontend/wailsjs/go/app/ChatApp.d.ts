@@ -3,11 +3,21 @@
 import {app} from '../models';
 import {context} from '../models';
 
+export function AnswerCall(arg1:string):Promise<void>;
+
 export function CheckConnection():Promise<void>;
 
 export function ConnectWebSocket():Promise<void>;
 
+export function CreateGroup(arg1:string,arg2:string,arg3:Array<string>):Promise<app.Group>;
+
 export function Disconnect():Promise<void>;
+
+export function EndCall(arg1:string):Promise<void>;
+
+export function GetGroupMessages(arg1:string):Promise<Array<app.Message>>;
+
+export function GetGroups():Promise<Array<app.Group>>;
 
 export function GetMessages(arg1:string):Promise<Array<app.Message>>;
 
@@ -17,9 +27,17 @@ export function GetUserName():Promise<string>;
 
 export function GetUsers():Promise<Array<app.User>>;
 
+export function InitiateCall(arg1:string,arg2:string):Promise<void>;
+
 export function MarkAsRead(arg1:string,arg2:string):Promise<void>;
 
+export function RejectCall(arg1:string):Promise<void>;
+
+export function SendGroupMessage(arg1:string,arg2:string):Promise<void>;
+
 export function SendMessage(arg1:string,arg2:string):Promise<void>;
+
+export function SendWebRTCSignal(arg1:string,arg2:string,arg3:Record<string, any>):Promise<void>;
 
 export function SetUserName(arg1:string):Promise<void>;
 

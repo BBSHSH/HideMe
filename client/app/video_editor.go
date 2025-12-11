@@ -69,7 +69,7 @@ func (v *VideoEditorApp) SelectFile() (string, error) {
 		Filters: []runtime.FileFilter{
 			{
 				DisplayName: "動画ファイル",
-				Pattern:     "*. mp4;*.mov;*.mkv;*.avi",
+				Pattern:     "*.mp4;*.mov;*.mkv;*.avi",
 			},
 		},
 	}
