@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"embed"
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -19,32 +21,34 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
-// ConnectionMonitor は接続状態を監視する構造体
-type ConnectionMonitor struct {
-	ctx           context.Context
-	chatApp       *app.ChatApp
-	checkInterval time.Duration
-	serverURL     string
+/* =========================
+   Health DTO
+========================= */
+
+type HealthStatus struct {
+	Local  bool `json:"local"`
+	Tsnet  bool `json:"tsnet"`
+	Server bool `json:"server"`
 }
 
-func NewConnectionMonitor(chatApp *app.ChatApp) *ConnectionMonitor {
+/* =========================
+   Connection Monitor
+========================= */
+
+type ConnectionMonitor struct {
+	ctx           context.Context
+	checkInterval time.Duration
+}
+
+func NewConnectionMonitor() *ConnectionMonitor {
 	return &ConnectionMonitor{
-		chatApp:       chatApp,
 		checkInterval: 1 * time.Second,
-		serverURL:     "http://localhost:9000",
 	}
 }
 
-// Start は接続監視を開始
 func (cm *ConnectionMonitor) Start(ctx context.Context) {
 	cm.ctx = ctx
-
-	log.Println("接続監視を開始します")
-
-	go func() {
-		time.Sleep(1 * time.Second)
-		cm.checkConnection()
-	}()
+	log.Println("接続監視開始")
 
 	ticker := time.NewTicker(cm.checkInterval)
 	go func() {
@@ -54,74 +58,80 @@ func (cm *ConnectionMonitor) Start(ctx context.Context) {
 				cm.checkConnection()
 			case <-ctx.Done():
 				ticker.Stop()
-				log.Println("接続監視を停止します")
 				return
 			}
 		}
 	}()
 }
 
-// checkConnection は接続状態を確認
+/* =========================
+   接続チェック本体
+========================= */
+
 func (cm *ConnectionMonitor) checkConnection() {
-	client := &http.Client{Timeout: 2 * time.Second}
-
-	// 正しいヘルスチェックURL
-	healthURL := cm.serverURL + "/health"
-	log.Printf("[接続確認] %s にリクエスト送信", healthURL)
-
-	resp, err := client.Get(healthURL)
-	if err != nil {
-		log.Printf("[接続確認] ✗ エラー: %v", err)
-		runtime.EventsEmit(cm.ctx, "connection_status", "disconnected")
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusOK {
-		log.Printf("[接続確認] ✓ OK (%d)", resp.StatusCode)
-		runtime.EventsEmit(cm.ctx, "connection_status", "connected")
+	// ① ローカル proxy
+	if err := cm.checkLocal(); err != nil {
+		runtime.EventsEmit(cm.ctx, "connection_status", "local_disconnected")
 		return
 	}
 
-	log.Printf("[接続確認] ✗ ステータスエラー (%d)", resp.StatusCode)
-	runtime.EventsEmit(cm.ctx, "connection_status", "error")
+	// ② tsnet サーバー疎通
+	if err := cm.checkTsnetServer(); err != nil {
+		runtime.EventsEmit(cm.ctx, "connection_status", "tsnet_disconnected")
+		return
+	}
+
+	// ③ すべてOK
+	runtime.EventsEmit(cm.ctx, "connection_status", "connected")
 }
 
-// 手動確認
-func (cm *ConnectionMonitor) GetConnectionStatus() string {
+func (cm *ConnectionMonitor) checkLocal() error {
 	client := &http.Client{Timeout: 2 * time.Second}
-	healthURL := cm.serverURL + "/health"
-
-	resp, err := client.Get(healthURL)
+	resp, err := client.Get("http://localhost:9000/health")
 	if err != nil {
-		return "disconnected"
+		return err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusOK {
-		return "connected"
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("local status %d", resp.StatusCode)
 	}
-	return "error"
+	return nil
 }
 
-func (cm *ConnectionMonitor) CheckNow() string {
-	status := cm.GetConnectionStatus()
-	runtime.EventsEmit(cm.ctx, "connection_status", status)
-	return status
+func (cm *ConnectionMonitor) checkTsnetServer() error {
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get("http://localhost:9000/api/health")
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("api health status %d", resp.StatusCode)
+	}
+
+	var health HealthStatus
+	if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
+		return err
+	}
+
+	// 🔴 ここが重要
+	if !health.Server {
+		return fmt.Errorf("tsnet server unreachable")
+	}
+
+	return nil
 }
+
+/* =========================
+   main
+========================= */
 
 func main() {
 	videoEditor := app.NewVideoEditorApp()
 	chatApp := app.NewChatApp()
-	connectionMonitor := NewConnectionMonitor(chatApp)
-
-	go func() {
-		http.HandleFunc("/video", videoEditor.VideoHandler)
-		log.Println("Video server starting on :8082")
-		if err := http.ListenAndServe(":8082", nil); err != nil {
-			log.Fatal(err)
-		}
-	}()
+	connectionMonitor := NewConnectionMonitor()
 
 	err := wails.Run(&options.App{
 		Title:  "HideMe!",
