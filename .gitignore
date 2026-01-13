@@ -1,2 +1,4 @@
 *.exe
 *.mp4
+database/database
+client/backend/tsnet-state

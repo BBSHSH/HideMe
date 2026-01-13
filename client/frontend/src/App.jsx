@@ -11,21 +11,27 @@ import './css/app.css';
 
 export default function App() {
   const [connectionStatus, setConnectionStatus] = useState("connected");
-  //接続状態の監視
+
   useEffect(() => {
-    if (window.runtime && window.runtime.EventsOn) {
+    if (window.runtime?.EventsOn) {
       window.runtime.EventsOn("connection_status", (status) => {
-        console.log("接続ステータス:", status);
         setConnectionStatus(status);
       });
     }
   }, []);
+  const localStatus = (connectionStatus === "connected" || connectionStatus === "tsnet_disconnected") ? "ok" : "ng";
+  
+  let tsnetStatus;
+  if (localStatus === "ng") {
+    tsnetStatus = "disabled"; 
+  } else {
+    tsnetStatus = connectionStatus === "connected" ? "ok" : "connecting";
+  }
 
-  const isError = connectionStatus !== "connected";
+  const isError = localStatus !== "ok" || tsnetStatus !== "ok";
 
   return (
     <div className="app-container">
-
       <div className={`app-content ${isError ? 'blurred' : ''}`}>
         <Router>
           <Routes>
@@ -41,19 +47,49 @@ export default function App() {
       {isError && (
         <div className="connection-overlay">
           <div className="overlay-box">
-            <h1 className="overlay-title">tsnetに接続できません</h1>
-            <p className="overlay-message">
-              tsnetがオフラインか、ネットワークに問題があります。<br />
-              再接続を試みています...<br /><br />
+            <h1 className="overlay-title">SYSTEM STATUS</h1>
 
-              時間がたっても解決しない場合は、再インストールをお試しください。
-            </p>
-            <div className="overlay-status">
-              現在の状態: <b>{connectionStatus}</b>
+            <div className="connection-flow">
+              <FlowItem label="クライアント" status="ok" />
+              <FlowConnector />
+              <FlowItem label="tsnet ローカル" status={localStatus} />
+              <FlowConnector disabled={tsnetStatus === "disabled"} />
+              <FlowItem label="tsnet サーバー" status={tsnetStatus} />
             </div>
+
+            <p className="overlay-message">
+              {localStatus === "ng" 
+                ? "ローカルサービスが起動していません。" 
+                : "接続を自動修復しています。そのままお待ちください。"}
+            </p>
           </div>
         </div>
       )}
     </div>
   );
+}
+
+function FlowItem({ label, status }) {
+  const statusLabels = {
+    ok: "接続済み",
+    ng: "未接続",
+    connecting: "接続試行中",
+    disabled: "接続不可"
+  };
+
+  return (
+    <div className={`flow-item ${status}`}>
+      <span className="flow-label">{label}</span>
+      <div className="status-badge-container">
+        <span className="status-badge">
+          {statusLabels[status]}
+          {status === "connecting" && <span className="dots">...</span>}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function FlowConnector({ disabled }) {
+  return <div className={`flow-connector ${disabled ? 'disabled' : ''}`} />;
 }
