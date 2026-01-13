@@ -18,22 +18,13 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-//go:embed all:frontend/dist
 var assets embed.FS
-
-/* =========================
-   Health DTO
-========================= */
 
 type HealthStatus struct {
 	Local  bool `json:"local"`
 	Tsnet  bool `json:"tsnet"`
 	Server bool `json:"server"`
 }
-
-/* =========================
-   Connection Monitor
-========================= */
 
 type ConnectionMonitor struct {
 	ctx           context.Context
@@ -64,24 +55,19 @@ func (cm *ConnectionMonitor) Start(ctx context.Context) {
 	}()
 }
 
-/* =========================
-   接続チェック本体
-========================= */
-
 func (cm *ConnectionMonitor) checkConnection() {
-	// ① ローカル proxy
+	// ローカル proxy
 	if err := cm.checkLocal(); err != nil {
 		runtime.EventsEmit(cm.ctx, "connection_status", "local_disconnected")
 		return
 	}
 
-	// ② tsnet サーバー疎通
+	// tsnet サーバー疎通
 	if err := cm.checkTsnetServer(); err != nil {
 		runtime.EventsEmit(cm.ctx, "connection_status", "tsnet_disconnected")
 		return
 	}
 
-	// ③ すべてOK
 	runtime.EventsEmit(cm.ctx, "connection_status", "connected")
 }
 
@@ -116,17 +102,12 @@ func (cm *ConnectionMonitor) checkTsnetServer() error {
 		return err
 	}
 
-	// 🔴 ここが重要
 	if !health.Server {
 		return fmt.Errorf("tsnet server unreachable")
 	}
 
 	return nil
 }
-
-/* =========================
-   main
-========================= */
 
 func main() {
 	videoEditor := app.NewVideoEditorApp()
