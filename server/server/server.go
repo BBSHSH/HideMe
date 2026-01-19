@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
-	"hidemeserver/models"
+	"hidemeserver/repository"
 	"hidemeserver/tsnet"
 	"log"
 	"net/http"
@@ -14,21 +14,29 @@ import (
 
 type ChatServer struct {
 	tsnet       *tsnet.TsnetManager
-	users       map[string]*models.User
-	usersMutex  sync.RWMutex
-	messages    map[string][]models.Message
-	msgMutex    sync.RWMutex
+	db          *repository.Database
+	userRepo    *repository.UserRepository
+	messageRepo *repository.MessageRepository
+	auditRepo   *repository.AuditRepository
 	wsClients   map[string]*websocket.Conn
 	wsClientsMu sync.RWMutex
 	upgrader    websocket.Upgrader
 }
 
-func NewChatServer(hostname string) *ChatServer {
+func NewChatServer(hostname, dbDSN string) (*ChatServer, error) {
+	// データベース初期化
+	db, err := repository.NewDatabase(dbDSN)
+	if err != nil {
+		return nil, fmt.Errorf("データベース初期化エラー: %v", err)
+	}
+
 	return &ChatServer{
-		tsnet:     tsnet.NewTsnetManager(),
-		users:     make(map[string]*models.User),
-		messages:  make(map[string][]models.Message),
-		wsClients: make(map[string]*websocket.Conn),
+		tsnet:       tsnet.NewTsnetManager(),
+		db:          db,
+		userRepo:    repository.NewUserRepository(db),
+		messageRepo: repository.NewMessageRepository(db),
+		auditRepo:   repository.NewAuditRepository(db),
+		wsClients:   make(map[string]*websocket.Conn),
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true
@@ -36,7 +44,7 @@ func NewChatServer(hostname string) *ChatServer {
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
 		},
-	}
+	}, nil
 }
 
 func (s *ChatServer) Start(ctx context.Context, hostname string) error {
@@ -61,6 +69,9 @@ func (s *ChatServer) setupRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/users", s.handleGetUsers)
 	mux.HandleFunc("/api/messages", s.handleMessages)
+	mux.HandleFunc("/api/unread", s.handleUnreadCount)
+	mux.HandleFunc("/api/gdpr/export", s.handleGDPRExport)
+	mux.HandleFunc("/api/gdpr/delete", s.handleGDPRDelete)
 	mux.HandleFunc("/ws", s.handleWebSocket)
 	mux.HandleFunc("/health", s.handleHealth)
 	return mux
@@ -73,15 +84,11 @@ func (s *ChatServer) Close() {
 	}
 	s.wsClientsMu.Unlock()
 
+	if s.db != nil {
+		s.db.Close()
+	}
+
 	if s.tsnet != nil {
 		s.tsnet.Stop()
 	}
-}
-
-// ヘルパー関数
-func (s *ChatServer) getConversationID(userID1, userID2 string) string {
-	if userID1 < userID2 {
-		return userID1 + ":" + userID2
-	}
-	return userID2 + ":" + userID1
 }
