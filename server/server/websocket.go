@@ -54,15 +54,18 @@ func (s *ChatServer) registerUser(userID, userName string, conn *websocket.Conn)
 		avatar = string(runes[0])
 	}
 
-	s.usersMutex.Lock()
-	s.users[userID] = &models.User{
+	user := &models.User{
 		ID:       userID,
 		Name:     userName,
 		Avatar:   avatar,
 		Status:   "online",
 		LastSeen: time.Now(),
 	}
-	s.usersMutex.Unlock()
+
+	// DBに保存
+	if err := s.userRepo.CreateOrUpdate(user); err != nil {
+		log.Printf("ユーザー保存エラー: %v\n", err)
+	}
 
 	s.wsClientsMu.Lock()
 	s.wsClients[userID] = conn
@@ -163,10 +166,11 @@ func (s *ChatServer) handleChatMessage(fromUserID string, payload json.RawMessag
 		Read:      false,
 	}
 
-	conversationID := s.getConversationID(fromUserID, msgData.ToID)
-	s.msgMutex.Lock()
-	s.messages[conversationID] = append(s.messages[conversationID], msg)
-	s.msgMutex.Unlock()
+	// DBに保存
+	if err := s.messageRepo.Create(&msg); err != nil {
+		log.Printf("メッセージ保存エラー: %v\n", err)
+		return
+	}
 
 	log.Printf("メッセージ: %s -> %s: %s\n", fromUserID, msgData.ToID, msgData.Content)
 
@@ -186,15 +190,11 @@ func (s *ChatServer) handleReadReceipt(payload json.RawMessage) {
 		return
 	}
 
-	conversationID := s.getConversationID(receipt.UserID, receipt.OtherID)
-	s.msgMutex.Lock()
-	for i := range s.messages[conversationID] {
-		if s.messages[conversationID][i].ID == receipt.MessageID {
-			s.messages[conversationID][i].Read = true
-			break
-		}
+	// DBで既読更新
+	if err := s.messageRepo.MarkAsRead(receipt.MessageID); err != nil {
+		log.Printf("既読更新エラー: %v\n", err)
+		return
 	}
-	s.msgMutex.Unlock()
 
 	s.sendToUser(receipt.OtherID, "message_read", map[string]string{
 		"messageId": receipt.MessageID,
@@ -227,12 +227,9 @@ func (s *ChatServer) sendToUser(userID, msgType string, payload interface{}) {
 }
 
 func (s *ChatServer) updateUserStatus(userID, status string) {
-	s.usersMutex.Lock()
-	if user, ok := s.users[userID]; ok {
-		user.Status = status
-		user.LastSeen = time.Now()
+	if err := s.userRepo.UpdateStatus(userID, status); err != nil {
+		log.Printf("ステータス更新エラー: %v\n", err)
 	}
-	s.usersMutex.Unlock()
 
 	s.broadcastUserStatus(userID, status)
 }

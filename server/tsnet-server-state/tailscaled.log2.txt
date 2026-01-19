@@ -1,2 +1,0 @@
-{"logtail":{"client_time":"2026-01-16T03:21:50.821658Z"},"text":"logger closing down\n"}
-{"logtail":{"client_time":"2026-01-16T03:21:50.8217852Z"},"text":"canceling captive portal context"}
