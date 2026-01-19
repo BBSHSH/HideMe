@@ -2,3 +2,11 @@
 *.mp4
 database/database
 client/backend/tsnet-state
+# tsnet
+server/tsnet-server-state/
+**/tailscaled.state
+**/tailscaled.log*
+
+# sqlite
+*.db-wal
+*.db-shm
