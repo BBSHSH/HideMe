@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"tailscale.com/tsnet"
 )
@@ -103,7 +104,7 @@ func (p *TsnetProxy) Start() error {
 		Timeout: 3 * time.Second,
 	}
 
-	// 🔴 tsnetサーバー疎通監視
+	// tsnetサーバー疎通監視
 	go p.startServerHealthCheck()
 
 	mux := http.NewServeMux()
@@ -284,23 +285,44 @@ func (p *TsnetProxy) updateHealth(fn func(*HealthStatus)) {
 	fn(&p.health)
 }
 
+// ユニークなホスト名を生成
+func generateUniqueHostname(baseHostname string) string {
+	// 方法1: UUID使用
+	uniqueID := uuid.New().String()[:8]
+	return fmt.Sprintf("%s-%s", baseHostname, uniqueID)
+}
+
 /* =========================
    main
 ========================= */
 
 func main() {
-	hostname := flag.String("hostname", "chat-client", "tsnet hostname")
+	hostname := flag.String("hostname", "", "tsnet hostname（空の場合は自動生成）")
 	server := flag.String("server", "chat-server", "server hostname")
 	port := flag.Int("port", 9000, "local port")
 	flag.Parse()
 
-	proxy := NewTsnetProxy(*hostname, *server, *port)
+	// ホスト名の決定
+	finalHostname := *hostname
+	if finalHostname == "" {
+		// コンピュータ名を取得
+		computerName, err := os.Hostname()
+		if err != nil {
+			computerName = "client"
+		}
+		// ユニークなIDを追加
+		finalHostname = generateUniqueHostname(fmt.Sprintf("chat-%s", computerName))
+		log.Printf("自動生成ホスト名: %s", finalHostname)
+	}
+
+	proxy := NewTsnetProxy(finalHostname, *server, *port)
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
 		<-sig
+		log.Println("シャットダウン中...")
 		proxy.tsnetServer.Close()
 		os.Exit(0)
 	}()
