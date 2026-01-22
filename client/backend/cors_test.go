@@ -131,3 +131,47 @@ func TestCORSMiddleware(t *testing.T) {
 		})
 	}
 }
+
+func TestCORSWithErrorResponse(t *testing.T) {
+	// Create a handler that returns an error (simulating backend unavailable)
+	errorHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "tsnet server unreachable", http.StatusBadGateway)
+	})
+
+	// Wrap with CORS middleware
+	handler := corsMiddleware(errorHandler)
+
+	req := httptest.NewRequest("POST", "/api/auth/login", nil)
+	req.Header.Set("Origin", "http://wails.localhost:34115")
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	// Check status code
+	if rr.Code != http.StatusBadGateway {
+		t.Errorf("Expected status 502, got %d", rr.Code)
+	}
+
+	// Check CORS headers are present even with error response
+	corsOrigin := rr.Header().Get("Access-Control-Allow-Origin")
+	if corsOrigin != "http://wails.localhost:34115" {
+		t.Errorf("Expected CORS origin 'http://wails.localhost:34115', got %q", corsOrigin)
+	}
+
+	methods := rr.Header().Get("Access-Control-Allow-Methods")
+	if methods != "GET, POST, PUT, DELETE, OPTIONS" {
+		t.Errorf("Expected CORS methods header, got %q", methods)
+	}
+
+	headers := rr.Header().Get("Access-Control-Allow-Headers")
+	if headers != "Content-Type, Authorization" {
+		t.Errorf("Expected CORS headers header, got %q", headers)
+	}
+
+	credentials := rr.Header().Get("Access-Control-Allow-Credentials")
+	if credentials != "true" {
+		t.Errorf("Expected CORS credentials true, got %q", credentials)
+	}
+
+	t.Logf("✓ CORS headers present on 502 error: Origin=%s, Methods=%s", corsOrigin, methods)
+}
