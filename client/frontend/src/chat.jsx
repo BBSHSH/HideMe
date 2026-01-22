@@ -44,8 +44,14 @@ export default function Chat({ user, onLogout }) {
 
   useEffect(() => {
     if (isWailsEnv) {
-      setShowUserPrompt(true);
-      setIsInitializing(false);
+      // ログイン済みユーザー情報がある場合は自動的にチャットを初期化
+      if (user && (user.displayName || user.username)) {
+        const displayName = user.displayName || user.username;
+        initializeChat(displayName);
+      } else {
+        setShowUserPrompt(true);
+        setIsInitializing(false);
+      }
 
       window.runtime.EventsOn('new_message', handleNewMessage);
       window.runtime.EventsOn('message_sent', handleMessageSent);
