@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
 import Login from './login';
-import Home from './home';
-import Editor from './editor';
+import Home from './Home';
+import Editor from './Editor';
 import Chat from './chat';
 import File from './file';
 import FileManage from './filemanage';
@@ -52,15 +52,15 @@ export default function App() {
     return <Login onLoginSuccess={handleLoginSuccess} />;
   }
 
-  // グイン済み
+  // ログイン済み
   return (
     <Router>
       <Routes>
         <Route path="/" element={<Home user={user} onLogout={handleLogout} />} />
-        <Route path="/chat" element={<Chat user={user} />} />
-        <Route path="/editor" element={<Editor />} />
-        <Route path="/file" element={<File />} />
-        <Route path="/filemanage" element={<FileManage />} />
+        <Route path="/chat" element={<Chat user={user} onLogout={handleLogout} />} />
+        <Route path="/editor" element={<Editor user={user} onLogout={handleLogout} />} />
+        <Route path="/file" element={<File user={user} onLogout={handleLogout} />} />
+        <Route path="/filemanage" element={<FileManage user={user} onLogout={handleLogout} />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Router>

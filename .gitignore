@@ -10,3 +10,9 @@ server/tsnet-server-state/
 # sqlite
 *.db-wal
 *.db-shm
+
+# Node.js
+node_modules/
+dist/
+build/
+*.log
