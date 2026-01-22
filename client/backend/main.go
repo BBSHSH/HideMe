@@ -102,6 +102,10 @@ func corsMiddleware(next http.Handler) http.Handler {
 }
 
 func isAllowedOrigin(origin string) bool {
+	if origin == "" {
+		return false
+	}
+
 	allowedOrigins := []string{
 		"http://localhost",
 		"http://wails.localhost",
@@ -109,7 +113,8 @@ func isAllowedOrigin(origin string) bool {
 	}
 
 	for _, allowed := range allowedOrigins {
-		if strings.HasPrefix(origin, allowed) {
+		// 完全一致またはポート番号付きの一致をチェック
+		if origin == allowed || strings.HasPrefix(origin, allowed+":") {
 			return true
 		}
 	}
