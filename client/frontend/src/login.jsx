@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import './css/app.css';
+import './css/auth.css';
 
 export default function Login({ onLoginSuccess }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -20,7 +20,7 @@ export default function Login({ onLoginSuccess }) {
         ? { username, password }
         : { username, password, displayName };
 
-      const response = await fetch(`http://localhost:8080${endpoint}`, {
+      const response = await fetch(`http://localhost:9000${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -34,12 +34,10 @@ export default function Login({ onLoginSuccess }) {
         throw new Error(data.error || '認証に失敗しました');
       }
 
-      // トークン保存
       localStorage.setItem('authToken', data.token);
       localStorage.setItem('currentUser', JSON.stringify(data.user));
 
       onLoginSuccess(data.user, data.token);
-
     } catch (err) {
       setError(err.message);
     } finally {
@@ -55,13 +53,14 @@ export default function Login({ onLoginSuccess }) {
         </h1>
 
         <form className="auth-form" onSubmit={handleSubmit}>
+          {/* ユーザー名 */}
           <div className="form-group">
             <label htmlFor="username">ユーザーID</label>
             <input
               id="username"
               type="text"
               className="form-input"
-              placeholder="3〜20文字"
+              placeholder="3-20文字"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
@@ -71,6 +70,7 @@ export default function Login({ onLoginSuccess }) {
             />
           </div>
 
+          {/* 表示名（登録時のみ） */}
           {!isLogin && (
             <div className="form-group">
               <label htmlFor="displayName">表示名</label>
@@ -78,74 +78,64 @@ export default function Login({ onLoginSuccess }) {
                 id="displayName"
                 type="text"
                 className="form-input"
-                placeholder="チャットに表示される名前"
+                placeholder="チャットで表示される名前"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 required
-                maxLength={30}
                 disabled={loading}
               />
             </div>
           )}
 
+          {/* パスワード */}
           <div className="form-group">
             <label htmlFor="password">パスワード</label>
             <input
               id="password"
               type="password"
               className="form-input"
-              placeholder="8文字以上"
+              placeholder="6文字以上"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              minLength={8}
+              minLength={6}
               disabled={loading}
             />
           </div>
 
+          {/* エラー */}
           {error && (
-            <div className="auth-error">
+            <div className="error-banner">
+              <span className="error-icon">⚠</span>
               {error}
             </div>
           )}
 
+          {/* 送信 */}
           <button
             type="submit"
-            className="auth-button"
+            className="submit-button"
             disabled={loading}
           >
-            {loading
-              ? '処理中...'
-              : isLogin
-                ? 'ログイン'
-                : 'アカウント作成'}
+            {loading ? '処理中...' : isLogin ? 'ログイン' : 'アカウント作成'}
           </button>
         </form>
 
-        <div className="auth-switch">
-          {isLogin ? (
-            <>
-              <span>アカウントを持っていませんか？</span>
-              <button
-                type="button"
-                onClick={() => setIsLogin(false)}
-                disabled={loading}
-              >
-                新規登録
-              </button>
-            </>
-          ) : (
-            <>
-              <span>すでにアカウントがありますか？</span>
-              <button
-                type="button"
-                onClick={() => setIsLogin(true)}
-                disabled={loading}
-              >
-                ログイン
-              </button>
-            </>
-          )}
+        {/* 切り替え */}
+        <div className="auth-toggle">
+          <button
+            type="button"
+            className="toggle-button"
+            onClick={() => {
+              setIsLogin(!isLogin);
+              setError('');
+            }}
+            disabled={loading}
+          >
+            {isLogin
+              ? 'アカウントをお持ちでない方はこちら'
+              : '既にアカウントをお持ちの方はこちら'}
+          </button>
         </div>
       </div>
     </div>

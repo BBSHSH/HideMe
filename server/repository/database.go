@@ -25,7 +25,7 @@ func NewDatabase(dbPath string) (*Database, error) {
 	db.Exec("PRAGMA cache_size = 10000")
 	db.Exec("PRAGMA temp_store = MEMORY")
 
-	db.SetMaxOpenConns(1) // SQLiteは1接続推奨
+	db.SetMaxOpenConns(1)
 
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("DBピングエラー: %v", err)
@@ -43,6 +43,18 @@ func NewDatabase(dbPath string) (*Database, error) {
 
 func (d *Database) createTables() error {
 	queries := []string{
+		// アカウントテーブル
+		`CREATE TABLE IF NOT EXISTS accounts (
+			id TEXT PRIMARY KEY,
+			username TEXT UNIQUE NOT NULL,
+			password_hash TEXT NOT NULL,
+			display_name TEXT NOT NULL,
+			avatar TEXT NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			last_login DATETIME
+		)`,
+
 		// ユーザーテーブル
 		`CREATE TABLE IF NOT EXISTS users (
 			id TEXT PRIMARY KEY,
@@ -51,7 +63,8 @@ func (d *Database) createTables() error {
 			status TEXT NOT NULL,
 			last_seen DATETIME NOT NULL,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (id) REFERENCES accounts(id) ON DELETE CASCADE
 		)`,
 
 		// メッセージテーブル
@@ -64,11 +77,11 @@ func (d *Database) createTables() error {
 			timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			read_status BOOLEAN NOT NULL DEFAULT 0,
 			deleted_at DATETIME,
-			FOREIGN KEY (from_id) REFERENCES users(id) ON DELETE CASCADE,
-			FOREIGN KEY (to_id) REFERENCES users(id) ON DELETE CASCADE
+			FOREIGN KEY (from_id) REFERENCES accounts(id) ON DELETE CASCADE,
+			FOREIGN KEY (to_id) REFERENCES accounts(id) ON DELETE CASCADE
 		)`,
 
-		// 監査ログテーブル（GDPR対応）
+		// 監査ログテーブル
 		`CREATE TABLE IF NOT EXISTS audit_logs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			user_id TEXT,
@@ -81,7 +94,7 @@ func (d *Database) createTables() error {
 			metadata TEXT
 		)`,
 
-		// 削除リクエストテーブル（GDPR対応）
+		// 削除リクエストテーブル
 		`CREATE TABLE IF NOT EXISTS deletion_requests (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			user_id TEXT NOT NULL,
@@ -90,23 +103,32 @@ func (d *Database) createTables() error {
 			status TEXT NOT NULL DEFAULT 'pending'
 		)`,
 
+		// セッショントークンテーブル
+		`CREATE TABLE IF NOT EXISTS sessions (
+			token TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			expires_at DATETIME NOT NULL,
+			FOREIGN KEY (user_id) REFERENCES accounts(id) ON DELETE CASCADE
+		)`,
+
 		// インデックス
-		`CREATE INDEX IF NOT EXISTS idx_messages_conversation 
-		 ON messages(from_id, to_id, timestamp)`,
+		`CREATE INDEX IF NOT EXISTS idx_accounts_username ON accounts(username)`,
+		`CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(from_id, to_id, timestamp)`,
+		`CREATE INDEX IF NOT EXISTS idx_messages_unread ON messages(to_id, read_status, deleted_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs(user_id, timestamp)`,
+		`CREATE INDEX IF NOT EXISTS idx_users_status ON users(status)`,
 
-		`CREATE INDEX IF NOT EXISTS idx_messages_unread 
-		 ON messages(to_id, read_status, deleted_at)`,
+		// トリガー
+		`CREATE TRIGGER IF NOT EXISTS update_accounts_updated_at 
+		 AFTER UPDATE ON accounts
+		 BEGIN
+			UPDATE accounts SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+		 END`,
 
-		`CREATE INDEX IF NOT EXISTS idx_messages_timestamp 
-		 ON messages(timestamp DESC)`,
-
-		`CREATE INDEX IF NOT EXISTS idx_audit_logs_user 
-		 ON audit_logs(user_id, timestamp)`,
-
-		`CREATE INDEX IF NOT EXISTS idx_users_status 
-		 ON users(status)`,
-
-		// トリガー: updated_at自動更新
 		`CREATE TRIGGER IF NOT EXISTS update_users_updated_at 
 		 AFTER UPDATE ON users
 		 BEGIN

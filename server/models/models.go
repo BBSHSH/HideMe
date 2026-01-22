@@ -9,7 +9,7 @@ import (
 type Account struct {
 	ID           string     `json:"id"`
 	Username     string     `json:"username"`
-	PasswordHash string     `json:"-"` // JSONには含めない
+	PasswordHash string     `json:"-"`
 	DisplayName  string     `json:"displayName"`
 	Avatar       string     `json:"avatar"`
 	CreatedAt    time.Time  `json:"createdAt"`
