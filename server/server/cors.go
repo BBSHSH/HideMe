@@ -57,4 +57,3 @@ func isAllowedOrigin(origin string) bool {
 
 	return false
 }
-
