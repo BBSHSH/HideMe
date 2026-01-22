@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -135,7 +136,11 @@ func TestCORSMiddleware(t *testing.T) {
 func TestCORSWithErrorResponse(t *testing.T) {
 	// Create a handler that returns an error (simulating backend unavailable)
 	errorHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "tsnet server unreachable", http.StatusBadGateway)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadGateway)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "backend server unreachable",
+		})
 	})
 
 	// Wrap with CORS middleware
@@ -173,5 +178,22 @@ func TestCORSWithErrorResponse(t *testing.T) {
 		t.Errorf("Expected CORS credentials true, got %q", credentials)
 	}
 
+	// Verify Content-Type is JSON
+	contentType := rr.Header().Get("Content-Type")
+	if contentType != "application/json" {
+		t.Errorf("Expected Content-Type 'application/json', got %q", contentType)
+	}
+
+	// Verify response body is valid JSON
+	var response map[string]string
+	if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
+		t.Errorf("Expected valid JSON response, got error: %v", err)
+	}
+
+	if response["error"] != "backend server unreachable" {
+		t.Errorf("Expected error message 'backend server unreachable', got %q", response["error"])
+	}
+
 	t.Logf("✓ CORS headers present on 502 error: Origin=%s, Methods=%s", corsOrigin, methods)
+	t.Logf("✓ JSON error response: %v", response)
 }

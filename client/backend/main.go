@@ -213,14 +213,22 @@ func (p *TsnetProxy) handleAPIProxy(w http.ResponseWriter, r *http.Request) {
 
 	req, err := http.NewRequest(r.Method, targetURL, r.Body)
 	if err != nil {
-		http.Error(w, "request error", http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "request error",
+		})
 		return
 	}
 	req.Header = r.Header.Clone()
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
-		http.Error(w, "tsnet server unreachable", http.StatusBadGateway)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadGateway)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "backend server unreachable",
+		})
 		return
 	}
 	defer resp.Body.Close()
