@@ -42,17 +42,9 @@ export default function Chat({ user, onLogout }) {
   const messagesEndRef = useRef(null);
   const pollIntervalRef = useRef(null);
 
+  // Event listeners setup (only once)
   useEffect(() => {
     if (isWailsEnv) {
-      // ログイン済みユーザー情報がある場合は自動的にチャットを初期化
-      if (user && (user.displayName || user.username)) {
-        const displayName = user.displayName || user.username;
-        initializeChat(displayName);
-      } else {
-        setShowUserPrompt(true);
-        setIsInitializing(false);
-      }
-
       window.runtime.EventsOn('new_message', handleNewMessage);
       window.runtime.EventsOn('message_sent', handleMessageSent);
       window.runtime.EventsOn('message_read', handleMessageRead);
@@ -72,10 +64,24 @@ export default function Chat({ user, onLogout }) {
         window.runtime.EventsOff('user_status');
         window.runtime.EventsOff('connection_lost');
       };
+    }
+  }, []);
+
+  // User-based initialization
+  useEffect(() => {
+    if (isWailsEnv) {
+      // ログイン済みユーザー情報がある場合は自動的にチャットを初期化
+      if (user && (user.displayName || user.username)) {
+        const displayName = user.displayName || user.username;
+        initializeChat(displayName);
+      } else {
+        setShowUserPrompt(true);
+        setIsInitializing(false);
+      }
     } else {
       setIsInitializing(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     scrollToBottom();
