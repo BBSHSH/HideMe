@@ -143,6 +143,8 @@ func TestIsAllowedOrigin(t *testing.T) {
 		{"evil domain", "http://evil.com", false},
 		{"empty origin", "", false},
 		{"subdomain of localhost", "http://sub.localhost:3000", false},
+		{"localhost.evil.com - security test", "http://localhost.evil.com", false},
+		{"wails.localhost.evil.com - security test", "http://wails.localhost.evil.com", false},
 	}
 
 	for _, tt := range tests {

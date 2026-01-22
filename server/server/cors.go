@@ -5,6 +5,13 @@ import (
 	"strings"
 )
 
+// allowedOrigins 許可するオリジンのリスト
+var allowedOrigins = []string{
+	"http://localhost",
+	"http://wails.localhost",
+	"http://127.0.0.1",
+}
+
 // corsMiddleware CORSヘッダーを設定するミドルウェア
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -31,17 +38,23 @@ func corsMiddleware(next http.Handler) http.Handler {
 
 // isAllowedOrigin オリジンが許可されているかチェック
 func isAllowedOrigin(origin string) bool {
-	allowedOrigins := []string{
-		"http://localhost",
-		"http://wails.localhost",
-		"http://127.0.0.1",
+	if origin == "" {
+		return false
 	}
 
+	// プロトコルとホスト部分を分離
+	// 例: "http://localhost:3000" -> "http://localhost"
 	for _, allowed := range allowedOrigins {
-		if strings.HasPrefix(origin, allowed) {
+		// 完全一致（ポートなし）
+		if origin == allowed {
+			return true
+		}
+		// ポート付きの場合は、ホスト部分が一致し、その後にコロンが続くことを確認
+		if strings.HasPrefix(origin, allowed+":") {
 			return true
 		}
 	}
 
 	return false
 }
+
