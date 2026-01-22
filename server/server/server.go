@@ -61,6 +61,9 @@ func (s *ChatServer) Start(ctx context.Context, hostname string) error {
 	}
 
 	mux := s.setupRoutes()
+	
+	// CORSミドルウェアを適用
+	handler := corsMiddleware(mux)
 
 	listener, err := s.tsnet.Listen("tcp", ":8080")
 	if err != nil {
@@ -68,7 +71,7 @@ func (s *ChatServer) Start(ctx context.Context, hostname string) error {
 	}
 
 	log.Println("チャットサーバー起動中 (tsnet経由でポート8080)")
-	return http.Serve(listener, mux)
+	return http.Serve(listener, handler)
 }
 
 func (s *ChatServer) setupRoutes() *http.ServeMux {

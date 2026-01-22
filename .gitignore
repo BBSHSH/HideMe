@@ -10,3 +10,7 @@ server/tsnet-server-state/
 # sqlite
 *.db-wal
 *.db-shm
+
+# build artifacts
+server/hidemeserver
+client/backend/backend
