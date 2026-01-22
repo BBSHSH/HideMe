@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// handleRegister アカウント登録
 func (s *ChatServer) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -28,7 +27,6 @@ func (s *ChatServer) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// バリデーション
 	if req.Username == "" || req.Password == "" || req.DisplayName == "" {
 		http.Error(w, "All fields are required", http.StatusBadRequest)
 		return
@@ -44,7 +42,6 @@ func (s *ChatServer) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ユーザー名の重複チェック
 	exists, err := s.accountRepo.UsernameExists(req.Username)
 	if err != nil {
 		log.Printf("ユーザー名チェックエラー: %v", err)
@@ -57,14 +54,12 @@ func (s *ChatServer) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// アバター生成
 	avatar := "?"
 	runes := []rune(req.DisplayName)
 	if len(runes) > 0 {
 		avatar = string(runes[0])
 	}
 
-	// アカウント作成
 	account := &models.Account{
 		ID:          uuid.New().String(),
 		Username:    req.Username,
@@ -78,8 +73,15 @@ func (s *ChatServer) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 監査ログ
-	s.auditRepo.Log(account.ID, "register", "account", account.ID, r.RemoteAddr, r.UserAgent(), nil)
+	s.auditRepo.Log(
+		account.ID,
+		"register",
+		"account",
+		account.ID,
+		r.RemoteAddr,
+		r.UserAgent(),
+		nil,
+	)
 
 	log.Printf("新規アカウント作成: %s (%s)", req.Username, account.ID)
 
@@ -95,7 +97,6 @@ func (s *ChatServer) handleRegister(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleLogin ログイン
 func (s *ChatServer) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -112,7 +113,6 @@ func (s *ChatServer) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// アカウント取得
 	account, err := s.accountRepo.GetByUsername(req.Username)
 	if err != nil {
 		log.Printf("アカウント取得エラー: %v", err)
@@ -125,13 +125,11 @@ func (s *ChatServer) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// パスワード検証
 	if !s.accountRepo.VerifyPassword(account, req.Password) {
 		http.Error(w, "Invalid username or password", http.StatusUnauthorized)
 		return
 	}
 
-	// セッション作成
 	session, err := s.sessionRepo.Create(account.ID)
 	if err != nil {
 		log.Printf("セッション作成エラー: %v", err)
@@ -139,11 +137,17 @@ func (s *ChatServer) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 最終ログイン時刻を更新
 	s.accountRepo.UpdateLastLogin(account.ID)
 
-	// 監査ログ
-	s.auditRepo.Log(account.ID, "login", "session", session.Token, r.RemoteAddr, r.UserAgent(), nil)
+	s.auditRepo.Log(
+		account.ID,
+		"login",
+		"session",
+		session.Token,
+		r.RemoteAddr,
+		r.UserAgent(),
+		nil,
+	)
 
 	log.Printf("ログイン成功: %s (%s)", account.Username, account.ID)
 
@@ -160,7 +164,6 @@ func (s *ChatServer) handleLogin(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleLogout ログアウト
 func (s *ChatServer) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -173,7 +176,6 @@ func (s *ChatServer) handleLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// セッション削除
 	if err := s.sessionRepo.Delete(token); err != nil {
 		log.Printf("セッション削除エラー: %v", err)
 	}
@@ -184,7 +186,6 @@ func (s *ChatServer) handleLogout(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleVerify トークン検証
 func (s *ChatServer) handleVerify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -197,7 +198,6 @@ func (s *ChatServer) handleVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// セッション取得
 	session, err := s.sessionRepo.GetByToken(token)
 	if err != nil {
 		log.Printf("セッション取得エラー: %v", err)
@@ -210,7 +210,6 @@ func (s *ChatServer) handleVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// アカウント情報取得
 	account, err := s.accountRepo.GetByID(session.UserID)
 	if err != nil {
 		log.Printf("アカウント取得エラー: %v", err)
@@ -235,20 +234,17 @@ func (s *ChatServer) handleVerify(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// extractToken リクエストからトークンを抽出
 func (s *ChatServer) extractToken(r *http.Request) string {
-	// Authorizationヘッダーから取得
 	auth := r.Header.Get("Authorization")
 	if strings.HasPrefix(auth, "Bearer ") {
 		return strings.TrimPrefix(auth, "Bearer ")
 	}
-
-	// クエリパラメータから取得
 	return r.URL.Query().Get("token")
 }
 
-// requireAuth 認証が必要なハンドラーをラップ
-func (s *ChatServer) requireAuth(handler func(w http.ResponseWriter, r *http.Request, userID string)) http.HandlerFunc {
+func (s *ChatServer) requireAuth(
+	handler func(w http.ResponseWriter, r *http.Request, userID string),
+) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := s.extractToken(r)
 		if token == "" {

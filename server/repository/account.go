@@ -19,7 +19,6 @@ func NewAccountRepository(database *Database) *AccountRepository {
 
 // Create アカウントを作成
 func (r *AccountRepository) Create(account *models.Account, password string) error {
-	// パスワードをハッシュ化
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return err

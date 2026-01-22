@@ -27,7 +27,6 @@ type ChatServer struct {
 }
 
 func NewChatServer(hostname, dbPath string) (*ChatServer, error) {
-	// データベース初期化
 	db, err := repository.NewDatabase(dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("データベース初期化エラー: %v", err)
@@ -51,19 +50,16 @@ func NewChatServer(hostname, dbPath string) (*ChatServer, error) {
 		},
 	}
 
-	// 期限切れセッションのクリーンアップを定期実行
 	go server.cleanupExpiredSessions()
 
 	return server, nil
 }
 
 func (s *ChatServer) Start(ctx context.Context, hostname string) error {
-	// tsnet起動
 	if err := s.tsnet.Start(ctx, hostname); err != nil {
 		return fmt.Errorf("tsnet起動エラー: %v", err)
 	}
 
-	// HTTPサーバー設定
 	mux := s.setupRoutes()
 
 	listener, err := s.tsnet.Listen("tcp", ":8080")

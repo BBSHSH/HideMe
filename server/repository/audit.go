@@ -16,14 +16,13 @@ func NewAuditRepository(database *Database) *AuditRepository {
 }
 
 func (r *AuditRepository) Log(userID, action, resourceType, resourceID, ipAddress, userAgent string, metadata map[string]interface{}) error {
-	var metadataJSON []byte
-	var err error
-
+	var metadataJSON string
 	if metadata != nil {
-		metadataJSON, err = json.Marshal(metadata)
+		bytes, err := json.Marshal(metadata)
 		if err != nil {
 			return err
 		}
+		metadataJSON = string(bytes)
 	}
 
 	query := `
@@ -31,7 +30,7 @@ func (r *AuditRepository) Log(userID, action, resourceType, resourceID, ipAddres
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
 
-	_, err = r.db.Exec(query, userID, action, resourceType, resourceID, ipAddress, userAgent, metadataJSON)
+	_, err := r.db.Exec(query, userID, action, resourceType, resourceID, ipAddress, userAgent, metadataJSON)
 	return err
 }
 
@@ -52,11 +51,9 @@ func (r *AuditRepository) GetUserLogs(userID string, limit int) ([]map[string]in
 
 	var logs []map[string]interface{}
 	for rows.Next() {
-		var action, resourceType, resourceID string
-		var timestamp interface{}
-		var metadata []byte
+		var action, resourceType, resourceID, timestamp, metadataStr string
 
-		err := rows.Scan(&action, &resourceType, &resourceID, &timestamp, &metadata)
+		err := rows.Scan(&action, &resourceType, &resourceID, &timestamp, &metadataStr)
 		if err != nil {
 			return nil, err
 		}
@@ -68,10 +65,11 @@ func (r *AuditRepository) GetUserLogs(userID string, limit int) ([]map[string]in
 			"timestamp":     timestamp,
 		}
 
-		if len(metadata) > 0 {
-			var meta map[string]interface{}
-			json.Unmarshal(metadata, &meta)
-			log["metadata"] = meta
+		if metadataStr != "" {
+			var metadata map[string]interface{}
+			if err := json.Unmarshal([]byte(metadataStr), &metadata); err == nil {
+				log["metadata"] = metadata
+			}
 		}
 
 		logs = append(logs, log)

@@ -80,7 +80,7 @@ func (r *SessionRepository) GetByToken(token string) (*models.Session, error) {
 	return session, nil
 }
 
-// Delete セッションを削除（ログアウト）
+// Delete セッションを削除
 func (r *SessionRepository) Delete(token string) error {
 	query := `DELETE FROM sessions WHERE token = ?`
 	_, err := r.db.Exec(query, token)

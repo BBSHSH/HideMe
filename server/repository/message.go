@@ -166,7 +166,6 @@ func (r *MessageRepository) GetRecentMessages(limit int) ([]models.Message, erro
 	return messages, rows.Err()
 }
 
-// ソフトデリート（GDPR対応）
 func (r *MessageRepository) SoftDeleteConversation(userID1, userID2 string) error {
 	query := `
 		UPDATE messages
@@ -178,7 +177,6 @@ func (r *MessageRepository) SoftDeleteConversation(userID1, userID2 string) erro
 	return err
 }
 
-// 完全削除（GDPR: Right to be forgotten）
 func (r *MessageRepository) HardDeleteByUser(userID string) error {
 	query := `DELETE FROM messages WHERE from_id = ? OR to_id = ?`
 	_, err := r.db.Exec(query, userID, userID)
