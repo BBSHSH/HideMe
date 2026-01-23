@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -96,18 +95,16 @@ func (c *ChatApp) CheckConnection() error {
 	return nil
 }
 
-func (c *ChatApp) SetUserName(name string, userID ...string) error {
+func (c *ChatApp) SetUserName(name string, userID string) error {
 	if err := c.CheckConnection(); err != nil {
 		return err
 	}
 
-	// userIDが指定されている場合はそれを使用（ログイン済みの場合）
-	// 指定されていない場合は新しいUUIDを生成（後方互換性のため）
-	if len(userID) > 0 && len(userID[0]) > 0 {
-		c.userID = userID[0]
-	} else {
-		c.userID = uuid.New().String()
+	if userID == "" {
+		return fmt.Errorf("ログインが必要です: userIDが指定されていません")
 	}
+
+	c.userID = userID
 	c.userName = name
 
 	return nil

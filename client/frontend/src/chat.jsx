@@ -36,8 +36,6 @@ export default function Chat({ user, onLogout }) {
   const [isConnected, setIsConnected] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [allContacts, setAllContacts] = useState([]);
-  const [showUserPrompt, setShowUserPrompt] = useState(false);
-  const [userNameInput, setUserNameInput] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const messagesEndRef = useRef(null);
   const pollIntervalRef = useRef(null);
@@ -48,7 +46,8 @@ export default function Chat({ user, onLogout }) {
       if (user && user.displayName && user.id) {
         initializeChat(user.displayName, user.id);
       } else {
-        setShowUserPrompt(true);
+        // ログインしていない場合はエラーメッセージを表示
+        setErrorMessage('チャットを使用するにはログインが必要です');
         setIsInitializing(false);
       }
 
@@ -92,17 +91,12 @@ export default function Chat({ user, onLogout }) {
   const initializeChat = async (userName, userId) => {
     try {
       setIsInitializing(true);
-      setShowUserPrompt(false);
       setErrorMessage('');
 
       console.log('ユーザー情報設定中:', userName, userId);
 
-      // ログイン済みのユーザー情報を使用
-      if (userId) {
-        await SetUserName(userName, userId);
-      } else {
-        await SetUserName(userName);
-      }
+      // ログイン済みのユーザー情報を使用（userIdは必須）
+      await SetUserName(userName, userId);
       console.log('ユーザー情報設定完了');
 
       const currentUserId = await GetUserID();
@@ -126,14 +120,18 @@ export default function Chat({ user, onLogout }) {
       const errMsg = getErrorMessage(error);
       setErrorMessage(errMsg);
       setIsInitializing(false);
-      setShowUserPrompt(true);
     }
   };
 
-  const handleUserNameSubmit = (e) => {
-    e.preventDefault();
-    if (userNameInput.trim()) {
-      initializeChat(userNameInput.trim());
+  const handleSearch = (query) => {
+    setSearchQuery(query);
+    if (query.trim() === '') {
+      setContacts(allContacts);
+    } else {
+      const filtered = allContacts.filter(c =>
+        c.name.toLowerCase().includes(query.toLowerCase())
+      );
+      setContacts(filtered);
     }
   };
 
@@ -350,84 +348,6 @@ export default function Chat({ user, onLogout }) {
     );
   }
 
-  if (showUserPrompt) {
-    return (
-      <div className="app">
-        <Header user={user} onLogout={onLogout} />
-        <div className="chat-container" style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100%',
-          flexDirection: 'column'
-        }}>
-          <div style={{
-            background: '#2f3136',
-            padding: '40px',
-            borderRadius: '10px',
-            textAlign: 'center',
-            minWidth: '350px'
-          }}>
-            <h2 style={{ color: '#fff', marginBottom: '20px' }}>チャットを開始</h2>
-
-            {errorMessage && (
-              <div style={{
-                background: '#f04747',
-                color: '#fff',
-                padding: '10px 15px',
-                borderRadius: '5px',
-                marginBottom:  '20px',
-                fontSize: '14px',
-                textAlign: 'left'
-              }}>
-                ⚠️ {errorMessage}
-              </div>
-            )}
-
-            <form onSubmit={handleUserNameSubmit}>
-              <input
-                type="text"
-                value={userNameInput}
-                onChange={(e) => setUserNameInput(e. target.value)}
-                placeholder="表示名を入力"
-                style={{
-                  padding: '12px 20px',
-                  fontSize: '16px',
-                  borderRadius: '5px',
-                  border: 'none',
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  marginBottom: '15px'
-                }}
-                autoFocus
-              />
-              <button
-                type="submit"
-                disabled={!userNameInput.trim()}
-                style={{
-                  padding: '12px 40px',
-                  fontSize: '16px',
-                  background: userNameInput.trim() ? '#5865f2' : '#4a4d52',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '5px',
-                  cursor: userNameInput.trim() ? 'pointer' : 'not-allowed',
-                  width: '100%'
-                }}
-              >
-                接続
-              </button>
-            </form>
-
-            <p style={{ color: '#72767d', fontSize: '12px', marginTop: '20px' }}>
-              tsnetで自動認識されます
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   if (isInitializing) {
     return (
       <div className="app">
@@ -444,7 +364,7 @@ export default function Chat({ user, onLogout }) {
     );
   }
 
-  if (!isConnected) {
+  if (!isConnected && !isInitializing) {
     return (
       <div className="app">
         <Header user={user} onLogout={onLogout} />
@@ -455,29 +375,14 @@ export default function Chat({ user, onLogout }) {
           height: '100%',
           flexDirection: 'column'
         }}>
-          <p style={{ color: '#ff6b6b' }}>サーバーに接続できませんでした</p>
-          {errorMessage && (
+          <p style={{ color: '#ff6b6b', fontSize: '18px' }}>
+            {errorMessage || 'サーバーに接続できませんでした'}
+          </p>
+          {!user && (
             <p style={{ color: '#999', fontSize: '14px', marginTop: '10px' }}>
-              {errorMessage}
+              チャットを使用するにはログインしてください
             </p>
           )}
-          <button
-            onClick={() => {
-              setErrorMessage('');
-              setShowUserPrompt(true);
-            }}
-            style={{
-              marginTop: '20px',
-              padding: '10px 20px',
-              background: '#5865f2',
-              color: 'white',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: 'pointer'
-            }}
-          >
-            再接続
-          </button>
         </div>
       </div>
     );
