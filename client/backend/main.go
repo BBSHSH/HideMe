@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -74,6 +75,54 @@ func NewTsnetProxy(hostname, serverHostname string, localPort int) *TsnetProxy {
 }
 
 /* =========================
+   CORS Middleware
+========================= */
+
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		
+		// 許可するオリジンのチェック
+		if isAllowedOrigin(origin) {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Set("Access-Control-Max-Age", "86400")
+		}
+
+		// Preflightリクエスト（OPTIONS）の処理
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func isAllowedOrigin(origin string) bool {
+	if origin == "" {
+		return false
+	}
+
+	allowedOrigins := []string{
+		"http://localhost",
+		"http://wails.localhost",
+		"http://127.0.0.1",
+	}
+
+	for _, allowed := range allowedOrigins {
+		// 完全一致またはポート番号付きの一致をチェック
+		if origin == allowed || strings.HasPrefix(origin, allowed+":") {
+			return true
+		}
+	}
+
+	return false
+}
+
+/* =========================
    Start
 ========================= */
 
@@ -113,8 +162,11 @@ func (p *TsnetProxy) Start() error {
 	mux.HandleFunc("/api/", p.handleAPIProxy)
 	mux.HandleFunc("/ws", p.handleWebSocket)
 
+	// CORSミドルウェアを適用
+	handler := corsMiddleware(mux)
+
 	log.Printf("ローカルプロキシ起動: http://localhost:%d", p.localPort)
-	return http.ListenAndServe(fmt.Sprintf(":%d", p.localPort), mux)
+	return http.ListenAndServe(fmt.Sprintf(":%d", p.localPort), handler)
 }
 
 /* =========================
@@ -161,14 +213,22 @@ func (p *TsnetProxy) handleAPIProxy(w http.ResponseWriter, r *http.Request) {
 
 	req, err := http.NewRequest(r.Method, targetURL, r.Body)
 	if err != nil {
-		http.Error(w, "request error", http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "request error",
+		})
 		return
 	}
 	req.Header = r.Header.Clone()
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
-		http.Error(w, "tsnet server unreachable", http.StatusBadGateway)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadGateway)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "backend server unreachable",
+		})
 		return
 	}
 	defer resp.Body.Close()

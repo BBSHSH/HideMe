@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import './css/home.css';
 import Header from './components/Header';
 
-export default function Home() {
+export default function Home({ user, onLogout }) {
   const [activities] = useState([
     { id: 1, type: 'chat', user: '田中 太郎', action: '新しいメッセージを送信しました', time: '5分前', avatar: 'T' },
     { id: 2, type: 'file', user: '山田 花子', action: 'プレゼン資料.pptxをアップロードしました', time: '15分前', avatar: 'Y' },
@@ -26,7 +26,7 @@ export default function Home() {
 
   return (
     <div className="app">
-      <Header />
+      <Header user={user} onLogout={onLogout} />
       <div className="home-container">
         {/* Hero Section */}
         {/* <section className="hero-section">

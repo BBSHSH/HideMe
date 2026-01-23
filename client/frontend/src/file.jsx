@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import './css/file.css';
 import Header from './components/Header';
 
-export default function File() {
+export default function File({ user, onLogout }) {
   const [dragActive, setDragActive] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState([
     { id: 1, name: 'プレゼン資料.pptx', size: '2.4 MB', type: 'pptx', uploadedBy: '田中 太郎', date: '2024/12/08', status: 'completed' },
@@ -105,7 +105,7 @@ export default function File() {
 
   return (
     <div className="app">
-      <Header />
+      <Header user={user} onLogout={onLogout} />
       <div className="file-container">
         {/* Upload Area */}
         <section className="upload-section">

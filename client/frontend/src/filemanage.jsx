@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import './css/filemanage.css';
 import Header from './components/Header';
 
-export default function FileManage() {
+export default function FileManage({ user, onLogout }) {
   const [selectedTab, setSelectedTab] = useState('all'); // all, videos, images, audio, documents
   const [viewMode, setViewMode] = useState('grid');
   const [selectedMedia, setSelectedMedia] = useState([]);
@@ -191,7 +191,7 @@ export default function FileManage() {
 
   return (
     <div className="app">
-      <Header />
+      <Header user={user} onLogout={onLogout} />
       <div className="media-container">
         {/* Stats Bar */}
         <section className="media-stats-bar">

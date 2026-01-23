@@ -2,6 +2,7 @@
 *.mp4
 database/database
 client/backend/tsnet-state
+client/backend/backend
 # tsnet
 server/tsnet-server-state/
 **/tailscaled.state
