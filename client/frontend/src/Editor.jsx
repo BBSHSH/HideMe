@@ -3,7 +3,7 @@ import { GetVideoInfo, ExportVideo, SelectFile } from '../wailsjs/go/app/VideoEd
 import Header from './components/Header';
 import './css/Editor.css';
 
-function App() {
+function App({ user, onLogout }) {
   const [videoPath, setVideoPath] = useState('');
   const [videoURL, setVideoURL] = useState('');
   const [videoInfo, setVideoInfo] = useState(null);
@@ -277,7 +277,7 @@ function App() {
 
   return (
     <div className="app">
-      <Header/>
+      <Header user={user} onLogout={onLogout} />
       <div className="main-container">
         <div className="left-panel">
           <div

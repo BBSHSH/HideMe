@@ -26,7 +26,7 @@ const getErrorMessage = (error) => {
   return '不明なエラー';
 };
 
-export default function Chat() {
+export default function Chat({ user, onLogout }) {
   const [contacts, setContacts] = useState([]);
   const [selectedContact, setSelectedContact] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -322,7 +322,7 @@ export default function Chat() {
   if (! isWailsEnv) {
     return (
       <div className="app">
-        <Header />
+        <Header user={user} onLogout={onLogout} />
         <div className="chat-container" style={{
           display: 'flex',
           alignItems: 'center',
@@ -341,7 +341,7 @@ export default function Chat() {
   if (showUserPrompt) {
     return (
       <div className="app">
-        <Header />
+        <Header user={user} onLogout={onLogout} />
         <div className="chat-container" style={{
           display: 'flex',
           alignItems: 'center',
@@ -419,7 +419,7 @@ export default function Chat() {
   if (isInitializing) {
     return (
       <div className="app">
-        <Header />
+        <Header user={user} onLogout={onLogout} />
         <div className="chat-container" style={{
           display: 'flex',
           alignItems:  'center',
@@ -435,7 +435,7 @@ export default function Chat() {
   if (!isConnected) {
     return (
       <div className="app">
-        <Header />
+        <Header user={user} onLogout={onLogout} />
         <div className="chat-container" style={{
           display: 'flex',
           alignItems:  'center',
@@ -473,7 +473,7 @@ export default function Chat() {
 
   return (
     <div className="app">
-      <Header />
+      <Header user={user} onLogout={onLogout} />
       <div className="chat-container">
         {/* Left Sidebar */}
         <div className="sidebar">
