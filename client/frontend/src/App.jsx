@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
 import Login from './login';
-import Home from './home';
-import Editor from './editor';
+import Home from './Home';
+import Editor from './Editor';
 import Chat from './chat';
 import File from './file';
 import FileManage from './filemanage';

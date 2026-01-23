@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import './css/chat.css';
+import './css/Chat.css';
 import Header from './components/Header';
 
 // Wails環境かどうかを判定
