@@ -44,8 +44,13 @@ export default function Chat({ user, onLogout }) {
 
   useEffect(() => {
     if (isWailsEnv) {
-      setShowUserPrompt(true);
-      setIsInitializing(false);
+      // ログイン済みユーザー情報から自動的にチャットを初期化
+      if (user && user.displayName && user.id) {
+        initializeChat(user.displayName, user.id);
+      } else {
+        setShowUserPrompt(true);
+        setIsInitializing(false);
+      }
 
       window.runtime.EventsOn('new_message', handleNewMessage);
       window.runtime.EventsOn('message_sent', handleMessageSent);
@@ -81,21 +86,25 @@ export default function Chat({ user, onLogout }) {
     }
   }, [selectedContact, isConnected]);
 
-  const initializeChat = async (userName) => {
+  const initializeChat = async (userName, userId) => {
     try {
       setIsInitializing(true);
       setShowUserPrompt(false);
       setErrorMessage('');
 
-      console.log('ユーザー名設定中:', userName);
+      console.log('ユーザー情報設定中:', userName, userId);
 
-      // ユーザー名をローカルに設定（サーバー登録なし）
-      await SetUserName(userName);
-      console.log('ユーザー名設定完了');
+      // ログイン済みのユーザー情報を使用
+      if (userId) {
+        await SetUserName(userName, userId);
+      } else {
+        await SetUserName(userName);
+      }
+      console.log('ユーザー情報設定完了');
 
-      const userId = await GetUserID();
-      console.log('ユーザーID:', userId);
-      setCurrentUser({ id: userId, name: userName });
+      const currentUserId = await GetUserID();
+      console.log('ユーザーID:', currentUserId);
+      setCurrentUser({ id: currentUserId, name: userName });
 
       console.log('WebSocket接続中...');
       await ConnectWebSocket();
