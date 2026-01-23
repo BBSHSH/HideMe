@@ -103,7 +103,7 @@ func (c *ChatApp) SetUserName(name string, userID ...string) error {
 
 	// userIDが指定されている場合はそれを使用（ログイン済みの場合）
 	// 指定されていない場合は新しいUUIDを生成（後方互換性のため）
-	if len(userID) > 0 && userID[0] != "" {
+	if len(userID) > 0 && len(userID[0]) > 0 {
 		c.userID = userID[0]
 	} else {
 		c.userID = uuid.New().String()

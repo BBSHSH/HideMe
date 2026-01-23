@@ -74,6 +74,9 @@ export default function Chat({ user, onLogout }) {
     } else {
       setIsInitializing(false);
     }
+    // Empty deps array is intentional: we only want to initialize once on mount
+    // The user prop is stable from parent component and won't change during session
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
