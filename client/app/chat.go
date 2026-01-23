@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -16,6 +17,7 @@ import (
 type ChatApp struct {
 	ctx        context.Context
 	wsConn     *websocket.Conn
+	wsMu       sync.Mutex // Protects WebSocket writes
 	userID     string
 	userName   string
 	tsnetURL   string
@@ -140,7 +142,10 @@ func (c *ChatApp) keepAlive() {
 			if c.wsConn == nil {
 				return
 			}
-			if err := c.wsConn.WriteMessage(websocket.PingMessage, nil); err != nil {
+			c.wsMu.Lock()
+			err := c.wsConn.WriteMessage(websocket.PingMessage, nil)
+			c.wsMu.Unlock()
+			if err != nil {
 				fmt.Printf("Ping送信エラー: %v\n", err)
 				return
 			}
@@ -212,7 +217,11 @@ func (c *ChatApp) SendMessage(toID, content string) error {
 		Payload: msg,
 	}
 
-	if err := c.wsConn.WriteJSON(wsMsg); err != nil {
+	c.wsMu.Lock()
+	err := c.wsConn.WriteJSON(wsMsg)
+	c.wsMu.Unlock()
+	
+	if err != nil {
 		return fmt.Errorf("メッセージ送信エラー: %v", err)
 	}
 
@@ -236,7 +245,11 @@ func (c *ChatApp) SendGroupMessage(groupID, content string) error {
 		Payload: msg,
 	}
 
-	if err := c.wsConn.WriteJSON(wsMsg); err != nil {
+	c.wsMu.Lock()
+	err := c.wsConn.WriteJSON(wsMsg)
+	c.wsMu.Unlock()
+	
+	if err != nil {
 		return fmt.Errorf("グループメッセージ送信エラー: %v", err)
 	}
 
@@ -259,7 +272,11 @@ func (c *ChatApp) MarkAsRead(messageID, otherID string) error {
 		Payload: receipt,
 	}
 
-	if err := c.wsConn.WriteJSON(wsMsg); err != nil {
+	c.wsMu.Lock()
+	err := c.wsConn.WriteJSON(wsMsg)
+	c.wsMu.Unlock()
+	
+	if err != nil {
 		return fmt.Errorf("既読送信エラー: %v", err)
 	}
 
@@ -281,7 +298,11 @@ func (c *ChatApp) InitiateCall(calleeID, callType string) error {
 		Payload: callData,
 	}
 
-	if err := c.wsConn.WriteJSON(wsMsg); err != nil {
+	c.wsMu.Lock()
+	err := c.wsConn.WriteJSON(wsMsg)
+	c.wsMu.Unlock()
+	
+	if err != nil {
 		return fmt.Errorf("通話開始エラー: %v", err)
 	}
 
@@ -298,7 +319,11 @@ func (c *ChatApp) AnswerCall(callID string) error {
 		Payload: map[string]string{"callId": callID},
 	}
 
-	if err := c.wsConn.WriteJSON(wsMsg); err != nil {
+	c.wsMu.Lock()
+	err := c.wsConn.WriteJSON(wsMsg)
+	c.wsMu.Unlock()
+	
+	if err != nil {
 		return fmt.Errorf("通話応答エラー: %v", err)
 	}
 
@@ -315,7 +340,11 @@ func (c *ChatApp) RejectCall(callID string) error {
 		Payload: map[string]string{"callId": callID},
 	}
 
-	if err := c.wsConn.WriteJSON(wsMsg); err != nil {
+	c.wsMu.Lock()
+	err := c.wsConn.WriteJSON(wsMsg)
+	c.wsMu.Unlock()
+	
+	if err != nil {
 		return fmt.Errorf("通話拒否エラー: %v", err)
 	}
 
@@ -332,7 +361,11 @@ func (c *ChatApp) EndCall(callID string) error {
 		Payload: map[string]string{"callId": callID},
 	}
 
-	if err := c.wsConn.WriteJSON(wsMsg); err != nil {
+	c.wsMu.Lock()
+	err := c.wsConn.WriteJSON(wsMsg)
+	c.wsMu.Unlock()
+	
+	if err != nil {
 		return fmt.Errorf("通話終了エラー: %v", err)
 	}
 
@@ -353,7 +386,11 @@ func (c *ChatApp) SendWebRTCSignal(callID, toID string, signal map[string]interf
 		},
 	}
 
-	if err := c.wsConn.WriteJSON(wsMsg); err != nil {
+	c.wsMu.Lock()
+	err := c.wsConn.WriteJSON(wsMsg)
+	c.wsMu.Unlock()
+	
+	if err != nil {
 		return fmt.Errorf("WebRTCシグナル送信エラー: %v", err)
 	}
 
@@ -513,8 +550,10 @@ func (c *ChatApp) Disconnect() {
 				"userId": c.userID,
 			},
 		}
+		c.wsMu.Lock()
 		c.wsConn.WriteJSON(wsMsg)
 		c.wsConn.Close()
+		c.wsMu.Unlock()
 		c.wsConn = nil
 	}
 }
