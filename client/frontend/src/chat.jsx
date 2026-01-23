@@ -273,18 +273,6 @@ export default function Chat({ user, onLogout }) {
     }
   };
 
-  const handleSearch = (query) => {
-    setSearchQuery(query);
-    if (query.trim() === '') {
-      setContacts(allContacts);
-    } else {
-      const filtered = allContacts.filter(c =>
-        c.name.toLowerCase().includes(query.toLowerCase())
-      );
-      setContacts(filtered);
-    }
-  };
-
   const handleSendMessage = async () => {
     if (! inputMessage.trim() || !selectedContact) return;
 
