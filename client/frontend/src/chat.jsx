@@ -156,11 +156,16 @@ export default function Chat({ user, onLogout }) {
       const mergedContacts = contactsList.map(newContact => {
         const existingContact = allContacts.find(c => c.id === newContact.id);
         if (existingContact) {
-          // 既存の連絡先の lastMessage, time, unread, lastMessageTime を保持
+          // 既存の連絡先にメッセージデータがある場合は保持
+          // lastMessage が存在する場合（空文字列でない）は既存のものを使用
           return {
             ...newContact,
-            lastMessage: existingContact.lastMessage || newContact.lastMessage,
-            time: existingContact.time || newContact.time,
+            lastMessage: existingContact.lastMessage && existingContact.lastMessage.length > 0 
+              ? existingContact.lastMessage 
+              : newContact.lastMessage,
+            time: existingContact.time && existingContact.time.length > 0 
+              ? existingContact.time 
+              : newContact.time,
             unread: existingContact.unread || newContact.unread,
             lastMessageTime: existingContact.lastMessageTime || newContact.lastMessageTime
           };
