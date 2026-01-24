@@ -153,8 +153,15 @@ export default function Chat({ user, onLogout }) {
       setAllContacts(contactsList);
       setContacts(contactsList);
 
+      // 現在選択中の連絡先を保持し、初回のみ最初の連絡先を自動選択
       if (contactsList.length > 0 && !selectedContact) {
         setSelectedContact(contactsList[0]);
+      } else if (selectedContact) {
+        // 選択中の連絡先が新しいリストにも存在するか確認し、更新されたデータで置き換え
+        const updatedSelected = contactsList.find(c => c.id === selectedContact.id);
+        if (updatedSelected) {
+          setSelectedContact(updatedSelected);
+        }
       }
     } catch (error) {
       console.error('ユーザー読み込みエラー:', error);
