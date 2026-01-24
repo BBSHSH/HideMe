@@ -39,6 +39,7 @@ export default function Chat({ user, onLogout }) {
   const [errorMessage, setErrorMessage] = useState('');
   const messagesEndRef = useRef(null);
   const pollIntervalRef = useRef(null);
+  const selectedContactIdRef = useRef(null); // Track selected contact ID
 
   useEffect(() => {
     if (isWailsEnv) {
@@ -154,13 +155,21 @@ export default function Chat({ user, onLogout }) {
       setContacts(contactsList);
 
       // 現在選択中の連絡先を保持し、初回のみ最初の連絡先を自動選択
-      if (contactsList.length > 0 && !selectedContact) {
-        setSelectedContact(contactsList[0]);
-      } else if (selectedContact) {
-        // 選択中の連絡先が新しいリストにも存在するか確認し、更新されたデータで置き換え
-        const updatedSelected = contactsList.find(c => c.id === selectedContact.id);
-        if (updatedSelected) {
-          setSelectedContact(updatedSelected);
+      if (contactsList.length > 0) {
+        if (selectedContactIdRef.current) {
+          // 選択中の連絡先IDが新しいリストにも存在するか確認し、更新されたデータで置き換え
+          const updatedSelected = contactsList.find(c => c.id === selectedContactIdRef.current);
+          if (updatedSelected) {
+            setSelectedContact(updatedSelected);
+          } else {
+            // 選択中の連絡先が見つからない場合（削除された等）、最初の連絡先を選択
+            setSelectedContact(contactsList[0]);
+            selectedContactIdRef.current = contactsList[0].id;
+          }
+        } else {
+          // 初回のみ最初の連絡先を自動選択
+          setSelectedContact(contactsList[0]);
+          selectedContactIdRef.current = contactsList[0].id;
         }
       }
     } catch (error) {
@@ -417,7 +426,10 @@ export default function Chat({ user, onLogout }) {
               contacts.map(contact => (
                 <div
                   key={contact.id}
-                  onClick={() => setSelectedContact(contact)}
+                  onClick={() => {
+                    setSelectedContact(contact);
+                    selectedContactIdRef.current = contact.id;
+                  }}
                   className={`contact-item ${selectedContact?.id === contact.id ? 'active' : ''}`}
                 >
                   <div className="contact-avatar-wrapper">
