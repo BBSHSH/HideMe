@@ -148,28 +148,52 @@ export default function Chat({ user, onLogout }) {
         lastMessage: '',
         time: formatTime(user.lastSeen),
         unread: 0,
-        status: user.status
+        status: user.status,
+        lastMessageTime: user.lastSeen // タイムスタンプを保持してソートに使用
       }));
 
-      setAllContacts(contactsList);
-      setContacts(contactsList);
+      // 既存の連絡先リストから最新メッセージ情報を保持
+      const mergedContacts = contactsList.map(newContact => {
+        const existingContact = allContacts.find(c => c.id === newContact.id);
+        if (existingContact) {
+          // 既存の連絡先の lastMessage, time, unread, lastMessageTime を保持
+          return {
+            ...newContact,
+            lastMessage: existingContact.lastMessage || newContact.lastMessage,
+            time: existingContact.time || newContact.time,
+            unread: existingContact.unread || newContact.unread,
+            lastMessageTime: existingContact.lastMessageTime || newContact.lastMessageTime
+          };
+        }
+        return newContact;
+      });
+
+      // 最新のメッセージ順にソート（最新が上）
+      const sortedContacts = mergedContacts.sort((a, b) => {
+        const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
+        const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
+        return timeB - timeA; // 降順（新しい順）
+      });
+
+      setAllContacts(sortedContacts);
+      setContacts(sortedContacts);
 
       // 現在選択中の連絡先を保持し、初回のみ最初の連絡先を自動選択
-      if (contactsList.length > 0) {
+      if (sortedContacts.length > 0) {
         if (selectedContactIdRef.current) {
           // 選択中の連絡先IDが新しいリストにも存在するか確認し、更新されたデータで置き換え
-          const updatedSelected = contactsList.find(c => c.id === selectedContactIdRef.current);
+          const updatedSelected = sortedContacts.find(c => c.id === selectedContactIdRef.current);
           if (updatedSelected) {
             setSelectedContact(updatedSelected);
           } else {
             // 選択中の連絡先が見つからない場合（削除された等）、最初の連絡先を選択
-            setSelectedContact(contactsList[0]);
-            selectedContactIdRef.current = contactsList[0].id;
+            setSelectedContact(sortedContacts[0]);
+            selectedContactIdRef.current = sortedContacts[0].id;
           }
         } else {
           // 初回のみ最初の連絡先を自動選択
-          setSelectedContact(contactsList[0]);
-          selectedContactIdRef.current = contactsList[0].id;
+          setSelectedContact(sortedContacts[0]);
+          selectedContactIdRef.current = sortedContacts[0].id;
         }
       }
     } catch (error) {
@@ -224,11 +248,19 @@ export default function Chat({ user, onLogout }) {
       setMessages(prev => [...prev, newMsg]);
       markAsRead(msg.id, msg.fromId);
     } else {
-      const updateUnread = (contactList) => contactList.map(c =>
-        c.id === msg.fromId
-          ? { ...c, unread: c.unread + 1, lastMessage: msg.content, time: '今' }
-          : c
-      );
+      const updateUnread = (contactList) => {
+        const updated = contactList.map(c =>
+          c.id === msg.fromId
+            ? { ...c, unread: c.unread + 1, lastMessage: msg.content, time: '今', lastMessageTime: msg.timestamp }
+            : c
+        );
+        // 最新のメッセージ順に再ソート
+        return updated.sort((a, b) => {
+          const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
+          const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
+          return timeB - timeA;
+        });
+      };
       setContacts(updateUnread);
       setAllContacts(updateUnread);
     }
@@ -246,11 +278,19 @@ export default function Chat({ user, onLogout }) {
 
     setMessages(prev => [...prev, newMsg]);
 
-    const updateLastMessage = (contactList) => contactList.map(c =>
-      c.id === msg.toId
-        ? { ...c, lastMessage: msg.content, time: '今' }
-        :  c
-    );
+    const updateLastMessage = (contactList) => {
+      const updated = contactList.map(c =>
+        c.id === msg.toId
+          ? { ...c, lastMessage: msg.content, time: '今', lastMessageTime: msg.timestamp }
+          :  c
+      );
+      // 最新のメッセージ順に再ソート
+      return updated.sort((a, b) => {
+        const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
+        const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
+        return timeB - timeA;
+      });
+    };
     setContacts(updateLastMessage);
     setAllContacts(updateLastMessage);
   };
