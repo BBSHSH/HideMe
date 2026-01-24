@@ -20,9 +20,20 @@ func (s *ChatServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if userName == "" {
-		userName = "Unknown"
+	// アカウント情報を取得して表示名を使用
+	account, err := s.accountRepo.GetByID(userID)
+	if err != nil {
+		log.Printf("アカウント取得エラー: %v\n", err)
+		http.Error(w, "Failed to get account", http.StatusInternalServerError)
+		return
 	}
+	if account == nil {
+		http.Error(w, "Account not found", http.StatusNotFound)
+		return
+	}
+
+	// アカウントの表示名を使用
+	userName = account.DisplayName
 
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -48,10 +59,17 @@ func (s *ChatServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *ChatServer) registerUser(userID, userName string, conn *websocket.Conn) {
+	// アカウント情報から最新のアバターを取得
 	avatar := "?"
-	runes := []rune(userName)
-	if len(runes) > 0 {
-		avatar = string(runes[0])
+	account, err := s.accountRepo.GetByID(userID)
+	if err == nil && account != nil {
+		avatar = account.Avatar
+	} else {
+		// フォールバック: 名前の最初の文字を使用
+		runes := []rune(userName)
+		if len(runes) > 0 {
+			avatar = string(runes[0])
+		}
 	}
 
 	user := &models.User{

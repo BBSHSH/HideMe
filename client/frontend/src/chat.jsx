@@ -36,16 +36,21 @@ export default function Chat({ user, onLogout }) {
   const [isConnected, setIsConnected] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [allContacts, setAllContacts] = useState([]);
-  const [showUserPrompt, setShowUserPrompt] = useState(false);
-  const [userNameInput, setUserNameInput] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const messagesEndRef = useRef(null);
   const pollIntervalRef = useRef(null);
+  const selectedContactIdRef = useRef(null); // Track selected contact ID
 
   useEffect(() => {
     if (isWailsEnv) {
-      setShowUserPrompt(true);
-      setIsInitializing(false);
+      // ログイン済みユーザー情報から自動的にチャットを初期化
+      if (user && user.displayName && user.id) {
+        initializeChat(user.displayName, user.id);
+      } else {
+        // ログインしていない場合はエラーメッセージを表示
+        setErrorMessage('チャットを使用するにはログインが必要です');
+        setIsInitializing(false);
+      }
 
       window.runtime.EventsOn('new_message', handleNewMessage);
       window.runtime.EventsOn('message_sent', handleMessageSent);
@@ -69,6 +74,9 @@ export default function Chat({ user, onLogout }) {
     } else {
       setIsInitializing(false);
     }
+    // Empty deps array is intentional: we only want to initialize once on mount
+    // The user prop is stable from parent component and won't change during session
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -81,21 +89,20 @@ export default function Chat({ user, onLogout }) {
     }
   }, [selectedContact, isConnected]);
 
-  const initializeChat = async (userName) => {
+  const initializeChat = async (userName, userId) => {
     try {
       setIsInitializing(true);
-      setShowUserPrompt(false);
       setErrorMessage('');
 
-      console.log('ユーザー名設定中:', userName);
+      console.log('ユーザー情報設定中:', userName, userId);
 
-      // ユーザー名をローカルに設定（サーバー登録なし）
-      await SetUserName(userName);
-      console.log('ユーザー名設定完了');
+      // ログイン済みのユーザー情報を使用（userIdは必須）
+      await SetUserName(userName, userId);
+      console.log('ユーザー情報設定完了');
 
-      const userId = await GetUserID();
-      console.log('ユーザーID:', userId);
-      setCurrentUser({ id: userId, name: userName });
+      const currentUserId = await GetUserID();
+      console.log('ユーザーID:', currentUserId);
+      setCurrentUser({ id: currentUserId, name: userName });
 
       console.log('WebSocket接続中...');
       await ConnectWebSocket();
@@ -114,14 +121,18 @@ export default function Chat({ user, onLogout }) {
       const errMsg = getErrorMessage(error);
       setErrorMessage(errMsg);
       setIsInitializing(false);
-      setShowUserPrompt(true);
     }
   };
 
-  const handleUserNameSubmit = (e) => {
-    e.preventDefault();
-    if (userNameInput.trim()) {
-      initializeChat(userNameInput.trim());
+  const handleSearch = (query) => {
+    setSearchQuery(query);
+    if (query.trim() === '') {
+      setContacts(allContacts);
+    } else {
+      const filtered = allContacts.filter(c =>
+        c.name.toLowerCase().includes(query.toLowerCase())
+      );
+      setContacts(filtered);
     }
   };
 
@@ -137,14 +148,58 @@ export default function Chat({ user, onLogout }) {
         lastMessage: '',
         time: formatTime(user.lastSeen),
         unread: 0,
-        status: user.status
+        status: user.status,
+        lastMessageTime: user.lastSeen // タイムスタンプを保持してソートに使用
       }));
 
-      setAllContacts(contactsList);
-      setContacts(contactsList);
+      // 既存の連絡先リストから最新メッセージ情報を保持
+      const mergedContacts = contactsList.map(newContact => {
+        const existingContact = allContacts.find(c => c.id === newContact.id);
+        if (existingContact) {
+          // 既存の連絡先にメッセージデータがある場合は保持
+          // lastMessage が存在する場合（空文字列でない）は既存のものを使用
+          return {
+            ...newContact,
+            lastMessage: existingContact.lastMessage && existingContact.lastMessage.length > 0 
+              ? existingContact.lastMessage 
+              : newContact.lastMessage,
+            time: existingContact.time && existingContact.time.length > 0 
+              ? existingContact.time 
+              : newContact.time,
+            unread: existingContact.unread || newContact.unread,
+            lastMessageTime: existingContact.lastMessageTime || newContact.lastMessageTime
+          };
+        }
+        return newContact;
+      });
 
-      if (contactsList.length > 0 && !selectedContact) {
-        setSelectedContact(contactsList[0]);
+      // 最新のメッセージ順にソート（最新が上）
+      const sortedContacts = mergedContacts.sort((a, b) => {
+        const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
+        const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
+        return timeB - timeA; // 降順（新しい順）
+      });
+
+      setAllContacts(sortedContacts);
+      setContacts(sortedContacts);
+
+      // 現在選択中の連絡先を保持し、初回のみ最初の連絡先を自動選択
+      if (sortedContacts.length > 0) {
+        if (selectedContactIdRef.current) {
+          // 選択中の連絡先IDが新しいリストにも存在するか確認し、更新されたデータで置き換え
+          const updatedSelected = sortedContacts.find(c => c.id === selectedContactIdRef.current);
+          if (updatedSelected) {
+            setSelectedContact(updatedSelected);
+          } else {
+            // 選択中の連絡先が見つからない場合（削除された等）、最初の連絡先を選択
+            setSelectedContact(sortedContacts[0]);
+            selectedContactIdRef.current = sortedContacts[0].id;
+          }
+        } else {
+          // 初回のみ最初の連絡先を自動選択
+          setSelectedContact(sortedContacts[0]);
+          selectedContactIdRef.current = sortedContacts[0].id;
+        }
       }
     } catch (error) {
       console.error('ユーザー読み込みエラー:', error);
@@ -198,11 +253,19 @@ export default function Chat({ user, onLogout }) {
       setMessages(prev => [...prev, newMsg]);
       markAsRead(msg.id, msg.fromId);
     } else {
-      const updateUnread = (contactList) => contactList.map(c =>
-        c.id === msg.fromId
-          ? { ...c, unread: c.unread + 1, lastMessage: msg.content, time: '今' }
-          : c
-      );
+      const updateUnread = (contactList) => {
+        const updated = contactList.map(c =>
+          c.id === msg.fromId
+            ? { ...c, unread: c.unread + 1, lastMessage: msg.content, time: '今', lastMessageTime: msg.timestamp }
+            : c
+        );
+        // 最新のメッセージ順に再ソート
+        return updated.sort((a, b) => {
+          const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
+          const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
+          return timeB - timeA;
+        });
+      };
       setContacts(updateUnread);
       setAllContacts(updateUnread);
     }
@@ -220,11 +283,19 @@ export default function Chat({ user, onLogout }) {
 
     setMessages(prev => [...prev, newMsg]);
 
-    const updateLastMessage = (contactList) => contactList.map(c =>
-      c.id === msg.toId
-        ? { ...c, lastMessage: msg.content, time: '今' }
-        :  c
-    );
+    const updateLastMessage = (contactList) => {
+      const updated = contactList.map(c =>
+        c.id === msg.toId
+          ? { ...c, lastMessage: msg.content, time: '今', lastMessageTime: msg.timestamp }
+          :  c
+      );
+      // 最新のメッセージ順に再ソート
+      return updated.sort((a, b) => {
+        const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
+        const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
+        return timeB - timeA;
+      });
+    };
     setContacts(updateLastMessage);
     setAllContacts(updateLastMessage);
   };
@@ -260,18 +331,6 @@ export default function Chat({ user, onLogout }) {
       await MarkAsRead(messageId, otherId);
     } catch (error) {
       console.error('既読エラー:', error);
-    }
-  };
-
-  const handleSearch = (query) => {
-    setSearchQuery(query);
-    if (query.trim() === '') {
-      setContacts(allContacts);
-    } else {
-      const filtered = allContacts.filter(c =>
-        c.name.toLowerCase().includes(query.toLowerCase())
-      );
-      setContacts(filtered);
     }
   };
 
@@ -338,84 +397,6 @@ export default function Chat({ user, onLogout }) {
     );
   }
 
-  if (showUserPrompt) {
-    return (
-      <div className="app">
-        <Header user={user} onLogout={onLogout} />
-        <div className="chat-container" style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100%',
-          flexDirection: 'column'
-        }}>
-          <div style={{
-            background: '#2f3136',
-            padding: '40px',
-            borderRadius: '10px',
-            textAlign: 'center',
-            minWidth: '350px'
-          }}>
-            <h2 style={{ color: '#fff', marginBottom: '20px' }}>チャットを開始</h2>
-
-            {errorMessage && (
-              <div style={{
-                background: '#f04747',
-                color: '#fff',
-                padding: '10px 15px',
-                borderRadius: '5px',
-                marginBottom:  '20px',
-                fontSize: '14px',
-                textAlign: 'left'
-              }}>
-                ⚠️ {errorMessage}
-              </div>
-            )}
-
-            <form onSubmit={handleUserNameSubmit}>
-              <input
-                type="text"
-                value={userNameInput}
-                onChange={(e) => setUserNameInput(e. target.value)}
-                placeholder="表示名を入力"
-                style={{
-                  padding: '12px 20px',
-                  fontSize: '16px',
-                  borderRadius: '5px',
-                  border: 'none',
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  marginBottom: '15px'
-                }}
-                autoFocus
-              />
-              <button
-                type="submit"
-                disabled={!userNameInput.trim()}
-                style={{
-                  padding: '12px 40px',
-                  fontSize: '16px',
-                  background: userNameInput.trim() ? '#5865f2' : '#4a4d52',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '5px',
-                  cursor: userNameInput.trim() ? 'pointer' : 'not-allowed',
-                  width: '100%'
-                }}
-              >
-                接続
-              </button>
-            </form>
-
-            <p style={{ color: '#72767d', fontSize: '12px', marginTop: '20px' }}>
-              tsnetで自動認識されます
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   if (isInitializing) {
     return (
       <div className="app">
@@ -432,7 +413,7 @@ export default function Chat({ user, onLogout }) {
     );
   }
 
-  if (!isConnected) {
+  if (!isConnected && !isInitializing) {
     return (
       <div className="app">
         <Header user={user} onLogout={onLogout} />
@@ -443,29 +424,14 @@ export default function Chat({ user, onLogout }) {
           height: '100%',
           flexDirection: 'column'
         }}>
-          <p style={{ color: '#ff6b6b' }}>サーバーに接続できませんでした</p>
-          {errorMessage && (
+          <p style={{ color: '#ff6b6b', fontSize: '18px' }}>
+            {errorMessage || 'サーバーに接続できませんでした'}
+          </p>
+          {!user && (
             <p style={{ color: '#999', fontSize: '14px', marginTop: '10px' }}>
-              {errorMessage}
+              チャットを使用するにはログインしてください
             </p>
           )}
-          <button
-            onClick={() => {
-              setErrorMessage('');
-              setShowUserPrompt(true);
-            }}
-            style={{
-              marginTop: '20px',
-              padding: '10px 20px',
-              background: '#5865f2',
-              color: 'white',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: 'pointer'
-            }}
-          >
-            再接続
-          </button>
         </div>
       </div>
     );
@@ -505,7 +471,10 @@ export default function Chat({ user, onLogout }) {
               contacts.map(contact => (
                 <div
                   key={contact.id}
-                  onClick={() => setSelectedContact(contact)}
+                  onClick={() => {
+                    setSelectedContact(contact);
+                    selectedContactIdRef.current = contact.id;
+                  }}
                   className={`contact-item ${selectedContact?.id === contact.id ? 'active' : ''}`}
                 >
                   <div className="contact-avatar-wrapper">
