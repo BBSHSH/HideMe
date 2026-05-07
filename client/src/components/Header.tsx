@@ -60,73 +60,99 @@ export function Header({ user, onLogout }: Props) {
     user?.avatar || user?.displayName?.charAt(0) || user?.username?.charAt(0) || '?';
 
   return (
-    <header className="flex justify-between items-center px-6 py-3 bg-[#2c3e50] text-[#ecf0f1] shadow-md z-[9999]">
-      
-      {/* Logo */}
-      <div className="flex items-center gap-2">
-        <img
-          src="../src/assets/images/HideMe.png"
-          alt="HideMe Logo"
-          className="w-10 h-10 object-contain"
-        />
-        <span className="text-2xl font-semibold">HIDEME</span>
-      </div>
+        <header
+          style={{
+            position: "fixed",
+            top: 0,
+            right: 0,
+            left: "100px",
+            height: "64px",
+            zIndex: 40,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "0 32px",
+            background: "rgba(11,12,14,0.6)",
+            backdropFilter: "blur(40px)",
+            borderBottom: "1px solid rgba(88,101,242,0.2)",
+            boxShadow: "inset 0 1px 0 0 rgba(255,255,255,0.05)",
+          }}
+        >
+          {/* Search */}
+          <div   style={{
+            flex: 1,
+            maxWidth: "448px",
+            position: "relative",
+            margin: "0 auto",
+          }}>
+            <span
+              className="material-symbols-outlined"
+              style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#64748b", fontSize: "20px" }}
+            >
+              search
+            </span>
+            <input
+              type="text"
+              placeholder="検索..."
+              style={{
+                width: "100%",
+                backgroundColor: "rgba(30,41,59,0.4)",
+                border: "1px solid rgba(88,101,242,0.1)",
+                borderRadius: "8px",
+                padding: "8px 16px 8px 40px",
+                fontSize: "14px",
+                color: "#e2e8f0",
+                outline: "none",
+              }}
+            />
+          </div>
 
-      {/* Nav */}
-      <nav className="flex gap-4">
-        <NavLink to="/" className={navLinkClass}>ホーム</NavLink>
-        <NavLink to="/chat" className={navLinkClass}>チャット</NavLink>
-        <NavLink to="/file" className={navLinkClass}>ファイル</NavLink>
-        <NavLink to="/editor" className={navLinkClass}>動画</NavLink>
-        <NavLink to="/filemanage" className={navLinkClass}>管理</NavLink>
-      </nav>
-
-      {/* Profile */}
-      {user && (
-        <div className="relative pl-5" ref={dropdownRef}>
-          <button
-            onClick={() => setShowDropdown(!showDropdown)}
-            aria-label="プロフィールメニュー"
-            className="flex items-center cursor-pointer transition-transform duration-200 hover:scale-105 active:scale-95"
-          >
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#667eea] to-[#764ba2] text-white flex items-center justify-center text-lg font-semibold shadow-md hover:shadow-[0_4px_12px_rgba(102,126,234,0.4)] transition-shadow duration-200">
-              {avatarLabel}
-            </div>
-          </button>
-
-          {showDropdown && (
-            <div className="absolute top-[calc(100%+10px)] right-0 bg-white rounded-xl shadow-xl min-w-[240px] z-[1000] overflow-hidden animate-[dropdownFadeIn_0.2s_ease-out]">
-              
-              {/* Dropdown Header */}
-              <div className="flex items-center gap-3 p-4">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#667eea] to-[#764ba2] text-white flex items-center justify-center text-xl font-semibold shrink-0">
-                  {avatarLabel}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-sm text-gray-800 truncate">
-                    {user.displayName || user.username}
-                  </div>
-                  <div className="text-xs text-gray-500 truncate">
-                    @{user.username}
-                  </div>
-                </div>
-              </div>
-
-              <div className="h-px bg-gray-200" />
-
-              {/* Logout */}
-              <button
-                onClick={handleLogout}
-                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-600 font-medium hover:bg-red-50 transition-colors duration-200 cursor-pointer"
-              >
-                <span className="text-lg w-6 text-center">🚪</span>
-                ログアウト
+          {/* Right side */}
+          <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+              <button style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", position: "relative" }}>
+                <span className="material-symbols-outlined">notifications</span>
+                <span
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    right: 0,
+                    width: "8px",
+                    height: "8px",
+                    backgroundColor: "#ef4444",
+                    borderRadius: "50%",
+                    border: "2px solid #0B0C0E",
+                  }}
+                />
+              </button>
+              <button style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}>
+                <span className="material-symbols-outlined">shield</span>
               </button>
             </div>
-          )}
-        </div>
-      )}
-    </header>
+            <div style={{ width: "1px", height: "32px", backgroundColor: "rgba(88,101,242,0.2)" }} />
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", cursor: "pointer" }}>
+              <div style={{ textAlign: "right" }}>
+                <p style={{ fontSize: "12px", fontWeight: 700, color: "#e2e8f0" }}>管理者ユーザー</p>
+                <p style={{ fontSize: "10px", color: "#64748b" }}>Tier 4 Clearance</p>
+              </div>
+              <div
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "50%",
+                  border: "1px solid rgba(88,101,242,0.3)",
+                  overflow: "hidden",
+                }}
+              >
+                <img
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuChBINZ9j9HBVgGFMzDCX95qswEqdNBjkHNV6h2Z2q7aSb-WTq3B4rxHA0zU7prK1zeVltYPH4FVjZH0qdMsLsQB4q-o7pwqD-ZUkKlgnjsM0OxU4DPVhJnjp9LVioL1rTQFQTaqm9VrURhg6aCppKYNgig1pyFhndyluLymv7_t9vC_XTHojqpkYhotXnbLBVSs7DMIMty2jCth21UaOa9eIDgxMyUQYhHUphOjz3iwvUyaMXyLj3xHIa1o9JhzaUkc70q1g8VS8P1"
+                  alt="Profile"
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
+              </div>
+            </div>
+          </div>
+        </header>
   );
 }
 export default Header

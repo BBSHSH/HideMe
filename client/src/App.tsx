@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Layout from './layouts/Layout'
-import Home from './pages/Home'
+import Dashboard from './pages/Dashboard'
+import Settings from './pages/Settings'
+import Editor from './pages/Editor'
 
 export type User = {
   avatar?: string
@@ -21,13 +23,14 @@ function App() {
   }
 
   return (
-    <BrowserRouter>
       <Routes>
         <Route element={<Layout user={user} onLogout={handleLogout} />}>
-          <Route path="/" element={<Home user={user ?? {}} />} />
+          <Route path="/" element={<Dashboard user={user ?? {}} />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/Editor" element={<Editor />} />
+
         </Route>
       </Routes>
-    </BrowserRouter>
   )
 }
 

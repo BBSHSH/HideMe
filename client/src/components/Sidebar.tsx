@@ -1,42 +1,71 @@
-import React from "react";
+import { useState } from "react";
+import { Link } from "react-router-dom";
 
 export type NavItem = {
   id: string;
   label: string;
-  icon: string; // material-symbols-outlined に渡す文字列
+  icon: string;
+  path: string;
 };
 
 export type SidebarProps = {
-  // 受け取ってもいいし、渡されなければこのファイル内のデフォルトを使う
   navItems?: NavItem[];
   activeNav: string;
   setActiveNav: (id: string) => void;
   onNewProject?: () => void;
 };
 
-// 追加したい navItems（デフォルト）
 const defaultNavItems: NavItem[] = [
-  { id: "dashboard", icon: "dashboard", label: "ダッシュボード" },
-  { id: "messages", icon: "chat_bubble", label: "メッセージ" },
-  { id: "storage", icon: "folder_shared", label: "ストレージ" },
-  { id: "editor", icon: "video_settings", label: "エディター" },
-  { id: "settings", icon: "settings", label: "設定" },
+  {
+    id: "dashboard",
+    icon: "dashboard",
+    label: "ダッシュボード",
+    path: "/",
+  },
+  {
+    id: "messages",
+    icon: "chat_bubble",
+    label: "メッセージ",
+    path: "/messages",
+  },
+  {
+    id: "storage",
+    icon: "folder_shared",
+    label: "ストレージ",
+    path: "/storage",
+  },
+  {
+    id: "editor",
+    icon: "video_settings",
+    label: "エディター",
+    path: "/editor",
+  },
+  {
+    id: "settings",
+    icon: "settings",
+    label: "設定",
+    path: "/settings",
+  },
 ];
 
 export function Sidebar({
-  navItems = defaultNavItems, // ← 渡されなければ上の配列を使う
+  navItems = defaultNavItems,
   activeNav,
   setActiveNav,
   onNewProject,
 }: SidebarProps) {
+  const [expanded, setExpanded] = useState(false);
+
   return (
     <aside
+      onMouseEnter={() => setExpanded(true)}
+      onMouseLeave={() => setExpanded(false)}
       style={{
         position: "fixed",
         left: 0,
         top: 0,
         height: "100%",
-        width: "256px",
+        width: expanded ? "256px" : "88px",
         display: "flex",
         flexDirection: "column",
         padding: "16px",
@@ -46,115 +75,197 @@ export function Sidebar({
         borderRight: "1px solid rgba(88,101,242,0.1)",
         boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
         zIndex: 50,
+
+        transition:
+          "width 0.45s cubic-bezier(0.22, 1, 0.36, 1)",
+        overflow: "hidden",
       }}
     >
       {/* Logo */}
-      <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "8px", marginBottom: "32px" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "12px",
+          padding: "8px",
+          marginBottom: "32px",
+          minHeight: "56px",
+        }}
+      >
         <div
           style={{
+            minWidth: "40px",
             width: "40px",
             height: "40px",
             backgroundColor: "#5865F2",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            borderRadius: "8px",
+            borderRadius: "12px",
             boxShadow: "0 0 20px rgba(88,101,242,0.3)",
+            transition: "all 0.3s",
+            transform: expanded ? "scale(1.05)" : "scale(1)",
           }}
         >
-          <span className="material-symbols-outlined" style={{ color: "white", fontVariationSettings: "'FILL' 1" }}>
+          <span
+            className="material-symbols-outlined"
+            style={{
+              color: "white",
+              fontVariationSettings: "'FILL' 1",
+            }}
+          >
             shield
           </span>
         </div>
-        <div>
-          <h1 style={{ fontSize: "18px", fontWeight: 900, color: "#5865F2", letterSpacing: "0.2em", textTransform: "uppercase" }}>
+
+        {/* Logo Text */}
+        <div
+          style={{
+            opacity: expanded ? 1 : 0,
+            transform: expanded
+              ? "translateX(0)"
+              : "translateX(-12px)",
+            transition: "all 0.35s ease",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <h1
+            style={{
+              fontSize: "18px",
+              fontWeight: 900,
+              color: "#5865F2",
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
+            }}
+          >
             HideMe
           </h1>
-          <p style={{ fontSize: "10px", color: "#64748b", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+
+          <p
+            style={{
+              fontSize: "10px",
+              color: "#64748b",
+              fontWeight: 700,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+            }}
+          >
             Secure Perimeter
           </p>
         </div>
       </div>
 
-      {/* Nav */}
-      <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: "4px" }}>
+      {/* Navigation */}
+      <nav
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          gap: "4px",
+        }}
+      >
         {navItems.map((item) => {
           const isActive = activeNav === item.id;
 
           return (
-            <a
+            <Link
               key={item.id}
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                setActiveNav(item.id);
-              }}
+              to={item.path}
+              onClick={() => setActiveNav(item.id)}
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: "12px",
-                padding: "12px 16px",
-                borderRadius: "8px",
+                gap: "16px",
+                padding: "14px 16px",
+                borderRadius: "12px",
                 textDecoration: "none",
-                fontSize: "14px",
-                fontWeight: 600,
-                letterSpacing: "0.05em",
-                transition: "all 0.2s",
+                overflow: "hidden",
+                transition: "all 0.25s ease",
+
                 ...(isActive
                   ? {
-                      backgroundColor: "rgba(88,101,242,0.1)",
+                      backgroundColor: "rgba(88,101,242,0.15)",
                       color: "#5865F2",
-                      borderRight: "2px solid #5865F2",
-                      boxShadow: "0 0 15px rgba(88,101,242,0.2)",
                     }
-                  : { color: "#94a3b8" }),
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) {
-                  (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(88,101,242,0.1)";
-                  (e.currentTarget as HTMLElement).style.color = "#a5b4fc";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) {
-                  (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-                  (e.currentTarget as HTMLElement).style.color = "#94a3b8";
-                }
+                  : {
+                      color: "#94a3b8",
+                    }),
               }}
             >
-              <span className="material-symbols-outlined">{item.icon}</span>
-              <span>{item.label}</span>
-            </a>
+              {/* Icon */}
+              <span
+                className="material-symbols-outlined"
+                style={{
+                  minWidth: "24px",
+                  transition:
+                    "transform 0.35s cubic-bezier(0.22,1,0.36,1)",
+                  transform: expanded
+                    ? "scale(1.15)"
+                    : "scale(1)",
+                }}
+              >
+                {item.icon}
+              </span>
+
+              {/* Label */}
+              <span
+                style={{
+                  opacity: expanded ? 1 : 0,
+                  transform: expanded
+                    ? "translateX(0)"
+                    : "translateX(-10px)",
+                  transition:
+                    "all 0.35s cubic-bezier(0.22,1,0.36,1)",
+                  whiteSpace: "nowrap",
+                  fontWeight: 600,
+                  letterSpacing: "0.05em",
+                }}
+              >
+                {item.label}
+              </span>
+            </Link>
           );
         })}
       </nav>
 
-      {/* New Project Button */}
-      <div style={{ paddingTop: "16px", borderTop: "1px solid rgba(88,101,242,0.1)" }}>
-        <button
-          type="button"
-          onClick={onNewProject}
+      {/* Button */}
+      <button
+        type="button"
+        onClick={onNewProject}
+        style={{
+          height: "52px",
+          borderRadius: "14px",
+          border: "none",
+          background: "#5865F2",
+          color: "white",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: expanded ? "flex-start" : "center",
+          gap: "12px",
+          padding: expanded ? "0 16px" : "0",
+          overflow: "hidden",
+          transition:
+            "all 0.4s cubic-bezier(0.22,1,0.36,1)",
+        }}
+      >
+        <span className="material-symbols-outlined">
+          add
+        </span>
+
+        <span
           style={{
-            width: "100%",
-            padding: "12px",
-            backgroundColor: "#5865F2",
-            color: "white",
+            opacity: expanded ? 1 : 0,
+            width: expanded ? "auto" : 0,
+            transition: "all 0.3s ease",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
             fontWeight: 700,
-            borderRadius: "8px",
-            border: "none",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "8px",
-            fontSize: "14px",
-            boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)",
           }}
         >
-          <span className="material-symbols-outlined">add</span>
-          <span>New Project</span>
-        </button>
-      </div>
+          New Project
+        </span>
+      </button>
     </aside>
   );
 }
