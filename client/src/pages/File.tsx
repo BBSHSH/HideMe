@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-export default function Editor() {
+export default function File() {
   const [volume, setVolume] = useState(80);
   const [fps, setFps] = useState<24 | 30 | 60>(30);
   const [resolution, setResolution] = useState("1080p (1920 x 1080)");
