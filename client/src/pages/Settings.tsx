@@ -1,4 +1,4 @@
-const HideMeDashboard = () => {
+const Settings = () => {
   const quickActions = [
     { icon: "add_to_photos", label: "新規チャンネル" },
     { icon: "upload_file", label: "アップロード" },
@@ -577,4 +577,4 @@ const HideMeDashboard = () => {
   );
 };
 
-export default HideMeDashboard;
+export default Settings;

@@ -52,10 +52,10 @@ export default function Layout({ user, onLogout }: Props) {
       `}</style>
       <Header user={user ?? {}} onLogout={onLogout} />
 
-      <Sidebar
+      {/* <Sidebar
         activeNav={activeNav}
         setActiveNav={setActiveNav}
-      />
+      /> */}
 
       <main>
         <Outlet />
