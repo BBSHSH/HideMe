@@ -448,9 +448,10 @@ export default function File() {
                 Main View
               </p>
             </div>
-            <SidebarLink icon="grid_view" label="All Collections" active />
-            <SidebarLink icon="schedule" label="Recent" />
-            <SidebarLink icon="favorite" label="Favorites" />
+            <SidebarLink icon="grid_view" label="すべて" active />
+            <SidebarLink icon="movie" label="動画"/>
+            <SidebarLink icon="schedule" label="最近の項目" />
+            <SidebarLink icon="favorite" label="お気に入り" />
             <SidebarLink icon="auto_delete" label="Cleanup" />
 
             <div style={{ marginTop: 64, marginBottom: 16 }}>
