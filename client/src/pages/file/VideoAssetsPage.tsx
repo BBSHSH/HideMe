@@ -1,5 +1,4 @@
 import { useState } from "react";
-import type { CSSProperties } from "react";
 import { C, F, glassPanel } from "../../theme/tokens";
 import { Icon } from "../../components/Icon";
 

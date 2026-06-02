@@ -1,8 +1,54 @@
 import { useState } from "react";
 import { C, F, glassPanel } from "../../theme/tokens";
 import { Icon } from "../../components/Icon";
-
+import { useFileList } from "../../hooks/useFiles";
+import { getDownloadUrl } from "../../api/files";
+import { useCollections } from "../../hooks/useFiles";
+import CreateCollectionModal from "../../components/file/CreateCollectionModal";
+import { formatBytes, formatRelativeTime } from "../../utils/format";
 // ─── CollectionCard ───────────────────────────────────────────────────────────
+
+function CollectionGrid() {
+  const { collections, loading, error } = useCollections();
+  const [showModal, setShowModal] = useState(false);
+  const [, forceRefresh] = useState(0);
+
+  const handleCreated = () => forceRefresh((n) => n + 1);
+
+  if (loading) return (
+    <div style={{ color: C.outlineVariant, padding: 32, textAlign: "center" }}>Loading...</div>
+  );
+
+  if (error) return (
+    <div style={{ color: "#f87171", padding: 32, textAlign: "center" }}>Failed to load collections</div>
+  );
+
+  return (
+    <>
+      {showModal && (
+        <CreateCollectionModal
+          onClose={() => setShowModal(false)}
+          onCreated={handleCreated}
+        />
+      )}
+      <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 20 }}>
+        {collections.map((col) => (
+          <CollectionCard
+            key={col.ID}
+            title={col.Name}
+            subtitle={col.Description}
+            itemCount=""
+            badgeColor={col.Color || C.primary}
+            badgeBorder={`${col.Color || C.primary}4d`}
+            buttonColor={col.Color || C.primary}
+            iconFallback={col.Icon || "folder"}
+          />
+        ))}
+        <AddNewCard onClick={() => setShowModal(true)} />
+      </div>
+    </>
+  );
+}
 interface CollectionCardProps {
   title:        string;
   subtitle:     string;
@@ -13,6 +59,45 @@ interface CollectionCardProps {
   imageSrc?:    string;
   iconFallback?: string;
   iconBg?:      string;
+}
+
+function RecentActivityList() {
+  const { files, loading, error } = useFileList();
+
+  if (loading) return (
+    <div style={{ padding: 32, textAlign: "center", color: C.outlineVariant }}>
+      Loading...
+    </div>
+  );
+
+  if (error) return (
+    <div style={{ padding: 32, textAlign: "center", color: "#f87171" }}>
+      Failed to load files
+    </div>
+  );
+
+  if (files.length === 0) return (
+    <div style={{ padding: 32, textAlign: "center", color: C.outlineVariant }}>
+      No files yet
+    </div>
+  );
+
+  return (
+    <>
+      {files.map((file, i) => (
+        <div key={file.name}>
+          {i > 0 && <div style={{ height: 1, background: `${C.outlineVariant}0d` }} />}
+          <RecentFileRow
+            icon="insert_drive_file"
+            iconColor={C.primary}
+            name={file.name}
+            meta={`Uploaded ${formatRelativeTime(file.modified)} • ${formatBytes(file.size)}`}
+            downloadUrl={getDownloadUrl(file.name)}
+          />
+        </div>
+      ))}
+    </>
+  );
 }
 
 function CollectionCard({
@@ -161,24 +246,26 @@ function CollectionCard({
 }
 
 // ─── AddNewCard ───────────────────────────────────────────────────────────────
-function AddNewCard() {
+function AddNewCard({ onClick }: { onClick: () => void }) {
   const [hovered, setHovered] = useState(false);
   return (
     <div
+      onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        border:         `2px dashed ${hovered ? `${C.primary}80` : `${C.outlineVariant}4d`}`,
-        borderRadius:   16,
-        display:        "flex",
-        flexDirection:  "column",
-        alignItems:     "center",
+        border: `2px dashed ${hovered ? `${C.primary}80` : `${C.outlineVariant}4d`}`,
+        borderRadius: 16,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
         justifyContent: "center",
-        padding:        40,
-        gap:            16,
-        cursor:         "pointer",
-        background:     hovered ? `${C.primary}0d` : "transparent",
-        transition:     "all 0.3s",
+        padding: 40,
+        gap: 16,
+        cursor: "pointer",
+        background: hovered ? `${C.primary}0d` : "transparent",
+        transition: "all 0.3s",
+        minHeight: 300,  
       }}
     >
       <div
@@ -205,8 +292,8 @@ function AddNewCard() {
 }
 
 // ─── RecentFileRow ────────────────────────────────────────────────────────────
-function RecentFileRow({ icon, iconColor, name, meta }: {
-  icon: string; iconColor: string; name: string; meta: string;
+function RecentFileRow({ icon, iconColor, name, meta, downloadUrl }: {
+  icon: string; iconColor: string; name: string; meta: string; downloadUrl: string;
 }) {
   const [hovered, setHovered] = useState(false);
   return (
@@ -244,7 +331,10 @@ function RecentFileRow({ icon, iconColor, name, meta }: {
         </div>
       </div>
       <div style={{ display: "flex", gap: 4 }}>
-        <button style={{ background: "none", border: "none", color: C.onSurfaceVariant, cursor: "pointer", padding: 8 }}>
+        <button
+          style={{ background: "none", border: "none", color: C.onSurfaceVariant, cursor: "pointer", padding: 8 }}
+          onClick={() => window.open(downloadUrl, "_blank")}
+        >
           <Icon name="download" size={20} />
         </button>
         <button style={{ background: "none", border: "none", color: C.onSurfaceVariant, cursor: "pointer", padding: 8 }}>
@@ -372,38 +462,9 @@ export default function AllFilesPage() {
         </div>
       </div>
 
-      {/* Collection cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 20 }}>
-        <CollectionCard
-          title="Valorant"
-          subtitle="Clips & VODs"
-          itemCount="128 Items"
-          badgeColor={C.primary}
-          badgeBorder={`${C.primary}4d`}
-          buttonColor={C.primary}
-          imageSrc="https://lh3.googleusercontent.com/aida-public/AB6AXuDmSuhQxlltTYj1EZYrbQU7YGBQBMQVYgRAQ59Cj8XNwuxpPk7-hHSlqhhLilROI02Ve80IXoOonkx5YRhRgGXBWA4W8FisrfARwraCvj24DLDIqXCOvDvcx63ah8m6PLBaKb2wEn1NjJKWwBGEjo1YDC91HqVNhxkKJkWGW-yRokP81lJqjmDSeVqbRc8STG5Tl1ecSmhb2h7WkX1kH_ysl5sVwsQySExpGHaGn_IBsJ9qhbDRH7QT_BhjVvO75dFmIkdxEfewX6Za"
-        />
-        <CollectionCard
-          title="Overwatch"
-          subtitle="Highlights"
-          itemCount="42 Items"
-          badgeColor={C.tertiary}
-          badgeBorder={`${C.tertiary}4d`}
-          buttonColor={C.tertiary}
-          imageSrc="https://lh3.googleusercontent.com/aida-public/AB6AXuAEgyDn1IcgJtdC-pj8CIQ0rq1xZLmsZZf9AjFpdjCSP_NBeVumiUA24km-xcL_kJTbooEHH6vq38SmEBS8f2xYm6WSIOPdma1uTi9Ks43ddq3HfU9BwAIwo-HbWZBpkX_jHMTFuNhoSLpT0pVV0YLLmLtaRHCiSfFT0s7iEM6GsYsyKxOWnNfXgrTuFohsHi9plGPHgeJXAVoJKj3keQQFmjEBuPgj_VVi02rRN6GZED2iBQ4uXGnKervZPNgxAnnIqjBF54M4j_QE"
-        />
-        <CollectionCard
-          title="Minecraft"
-          subtitle="Saves & World Data"
-          itemCount="2,450 Items"
-          badgeColor={C.onSurface}
-          badgeBorder={`${C.outlineVariant}4d`}
-          buttonColor={C.onSurface}
-          iconFallback="grid_on"
-          iconBg="linear-gradient(135deg, rgba(34,197,94,0.2), rgba(59,130,246,0.2))"
-        />
-        <AddNewCard />
-      </div>
+
+      {/* カテゴリの表示 */}
+        <CollectionGrid />
 
       {/* Recent activity */}
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -413,20 +474,19 @@ export default function AllFilesPage() {
         <div style={{ ...glassPanel, overflow: "hidden", border: `1px solid ${C.outlineVariant}1a` }}>
           <div
             style={{
-              padding:        "16px 20px",
-              borderBottom:   `1px solid ${C.outlineVariant}1a`,
-              display:        "flex",
-              alignItems:     "center",
-              gap:            10,
-              background:     "rgba(255,255,255,0.03)",
+              padding: "16px 20px",
+              borderBottom: `1px solid ${C.outlineVariant}1a`,
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              background: "rgba(255,255,255,0.03)",
             }}
           >
             <Icon name="history" style={{ color: C.primary }} />
             <span style={{ fontWeight: 700, fontSize: 16 }}>Latest files uploaded to vault</span>
           </div>
-          <RecentFileRow icon="movie"       iconColor={C.tertiary} name="clutch_round_final.mp4"    meta="Uploaded 2 hours ago • 45.2 MB" />
-          <div style={{ height: 1, background: `${C.outlineVariant}0d` }} />
-          <RecentFileRow icon="description" iconColor={C.primary}  name="vanguard_config_v2.cfg"    meta="Uploaded yesterday • 12 KB" />
+
+          <RecentActivityList />
         </div>
       </div>
 

@@ -1,7 +1,5 @@
 import { Outlet } from 'react-router-dom'
-import { useState } from 'react'
 import Header from '../components/Header'
-import Sidebar from '../components/Sidebar'
 import type { User } from '../App'
 
 type Props = {
@@ -10,10 +8,8 @@ type Props = {
 }
 
 export default function Layout({ user, onLogout }: Props) {
-  const [activeNav, setActiveNav] = useState('dashboard')
-
   return (
-    <div className="min-h-screen, bg-[#12131b] text-white ">
+    <div className="min-h-screen bg-[#12131b] text-white">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
         @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
@@ -50,14 +46,11 @@ export default function Layout({ user, onLogout }: Props) {
         }
         .animate-pulse { animation: pulse 2s cubic-bezier(0.4,0,0.6,1) infinite; }
       `}</style>
+
       <Header user={user ?? {}} onLogout={onLogout} />
 
-      {/* <Sidebar
-        activeNav={activeNav}
-        setActiveNav={setActiveNav}
-      /> */}
-
-      <main>
+      {/* Header height: 72px を paddingTop で確保 */}
+      <main style={{ paddingTop: 72 }}>
         <Outlet />
       </main>
     </div>

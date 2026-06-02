@@ -7,6 +7,7 @@ import Layout from './layouts/Layout'
 import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
 import Editor from './pages/Editor'
+import Login from './pages/Login'
 
 import FileLayout      from './layouts/FileLayout.tsx'
 import AllFilesPage    from './pages/file/AllFilesPage'
@@ -32,6 +33,7 @@ function App() {
         <Route path="/"        element={<Dashboard user={user ?? {}} />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/editor"   element={<Editor />} />
+        <Route path="/login"    element={<Login />} />
 
         {/* /file 以下はネスト → FileLayout の <Outlet /> が切り替わる */}
         <Route path="/file" element={<FileLayout />}>
