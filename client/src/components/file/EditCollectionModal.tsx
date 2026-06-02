@@ -1,70 +1,79 @@
 import { useRef, useState } from "react";
 import { C, F } from "../../theme/tokens";
 import { Icon } from "../Icon";
-import { createCollection, uploadCollectionImage } from "../../api/collections";
+import { updateCollection, deleteCollection, uploadCollectionImage } from "../../api/collections";
+import type { Collection } from "../../data/files";
 
 const PRESET_COLORS = [
   "#bec2ff", "#ffb689", "#e3e1ed", "#f28b82", "#81c995", "#78d9ec",
 ];
 
 interface Props {
+  collection: Collection;
   onClose: () => void;
-  onCreated: () => void;
+  onUpdated: () => void;
+  onDeleted: () => void;
 }
 
-export default function CreateCollectionModal({ onClose, onCreated }: Props) {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [color, setColor] = useState(PRESET_COLORS[0]);
-  const [icon] = useState("folder");
-  const [imageURL, setImageURL] = useState<string | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+export default function EditCollectionModal({ collection, onClose, onUpdated, onDeleted }: Props) {
+  const [name, setName] = useState(collection.Name);
+  const [description, setDescription] = useState(collection.Description);
+  const [color, setColor] = useState(collection.Color);
+  const [imageURL, setImageURL] = useState<string | null>(collection.ImageURL || null);
+  const [imagePreview, setImagePreview] = useState<string | null>(collection.ImageURL || null);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) {
-      console.log("No file selected");
-      return;
-    }
+    if (!file) return;
 
-    console.log("File selected:", file.name);
     setImagePreview(URL.createObjectURL(file));
     setUploading(true);
     setError(null);
     try {
-      console.log("Starting upload...");
       const url = await uploadCollectionImage(file);
-      console.log("Upload successful, URL:", url);
       setImageURL(url);
-    } catch (e) {
-      console.error("Upload error:", e);
+    } catch {
       setError("画像のアップロードに失敗しました");
-      setImagePreview(null);
+      setImagePreview(collection.ImageURL || null);
     } finally {
       setUploading(false);
     }
   };
-  
-  const handleCreate = async () => {
+
+  const handleUpdate = async () => {
     if (!name.trim()) return;
     setLoading(true);
     setError(null);
     try {
-      await createCollection({
+      await updateCollection(collection.ID, {
         name,
         description,
         color,
-        icon,
+        icon: "folder",
         image_url: imageURL ?? undefined,
       });
-      onCreated();
+      onUpdated();
       onClose();
     } catch {
-      setError("作成に失敗しました");
+      setError("更新に失敗しました");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setLoading(true);
+    try {
+      await deleteCollection(collection.ID);
+      onDeleted();
+      onClose();
+    } catch {
+      setError("削除に失敗しました");
     } finally {
       setLoading(false);
     }
@@ -83,6 +92,75 @@ export default function CreateCollectionModal({ onClose, onCreated }: Props) {
           zIndex: 100,
         }}
       />
+
+      {/* Delete Confirmation */}
+      {showDeleteConfirm && (
+        <div
+          style={{
+            position: "fixed",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            zIndex: 102,
+            width: 400,
+            background: "linear-gradient(180deg, rgba(30,31,48,0.98) 0%, rgba(18,19,27,0.98) 100%)",
+            border: `1px solid ${C.outlineVariant}33`,
+            borderRadius: 24,
+            padding: 32,
+            display: "flex",
+            flexDirection: "column",
+            gap: 24,
+            boxShadow: "0 25px 50px -12px rgba(0,0,0,0.8)",
+          }}
+        >
+          <div>
+            <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: C.onSurface, fontFamily: F.family }}>
+              本当によろしいですか？
+            </h3>
+            <p style={{ margin: "12px 0 0", fontSize: 14, color: C.outlineVariant }}>
+              「{collection.Name}」を削除します。この操作は取り消せません。
+            </p>
+          </div>
+
+          <div style={{ display: "flex", gap: 12 }}>
+            <button
+              onClick={() => setShowDeleteConfirm(false)}
+              style={{
+                flex: 1,
+                background: `${C.surfaceVariant}4d`,
+                border: "none",
+                borderRadius: 12,
+                padding: "12px 0",
+                color: C.onSurfaceVariant,
+                fontWeight: 700,
+                fontSize: 15,
+                cursor: "pointer",
+                fontFamily: F.family,
+              }}
+            >
+              キャンセル
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={loading}
+              style={{
+                flex: 1,
+                background: "#f87171",
+                border: "none",
+                borderRadius: 12,
+                padding: "12px 0",
+                color: "white",
+                fontWeight: 700,
+                fontSize: 15,
+                cursor: loading ? "default" : "pointer",
+                fontFamily: F.family,
+              }}
+            >
+              {loading ? "削除中..." : "削除する"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Modal */}
       <div
@@ -106,7 +184,7 @@ export default function CreateCollectionModal({ onClose, onCreated }: Props) {
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: C.onSurface, fontFamily: F.family }}>
-            新しいコレクション
+            コレクションを編集
           </h2>
           <button
             onClick={onClose}
@@ -122,7 +200,6 @@ export default function CreateCollectionModal({ onClose, onCreated }: Props) {
             アイコン画像
           </label>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            {/* Preview */}
             <div
               onClick={() => fileInputRef.current?.click()}
               style={{
@@ -137,7 +214,6 @@ export default function CreateCollectionModal({ onClose, onCreated }: Props) {
                 cursor: "pointer",
                 overflow: "hidden",
                 flexShrink: 0,
-                transition: "border-color 0.2s",
               }}
             >
               {imagePreview ? (
@@ -147,10 +223,9 @@ export default function CreateCollectionModal({ onClose, onCreated }: Props) {
                   style={{ width: "100%", height: "100%", objectFit: "cover" }}
                 />
               ) : (
-                <Icon name="add_photo_alternate" size={28} color={C.outlineVariant} />
+                <Icon name="add_photo_alternate" size={28} />
               )}
             </div>
-
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <button
                 onClick={() => fileInputRef.current?.click()}
@@ -167,11 +242,8 @@ export default function CreateCollectionModal({ onClose, onCreated }: Props) {
                   fontFamily: F.family,
                 }}
               >
-                {uploading ? "アップロード中..." : "画像を選択"}
+                {uploading ? "アップロード中..." : "画像を変更"}
               </button>
-              <span style={{ fontSize: 12, color: C.outlineVariant }}>
-                JPG / PNG / WebP
-              </span>
             </div>
           </div>
           <input
@@ -191,7 +263,6 @@ export default function CreateCollectionModal({ onClose, onCreated }: Props) {
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="コレクション名"
             style={{
               background: `${C.surfaceVariant}80`,
               border: `1px solid ${C.outlineVariant}33`,
@@ -213,7 +284,6 @@ export default function CreateCollectionModal({ onClose, onCreated }: Props) {
           <input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="任意"
             style={{
               background: `${C.surfaceVariant}80`,
               border: `1px solid ${C.outlineVariant}33`,
@@ -244,7 +314,6 @@ export default function CreateCollectionModal({ onClose, onCreated }: Props) {
                   background: c,
                   border: color === c ? `3px solid ${C.onSurface}` : "3px solid transparent",
                   cursor: "pointer",
-                  transition: "border 0.2s",
                 }}
               />
             ))}
@@ -257,7 +326,7 @@ export default function CreateCollectionModal({ onClose, onCreated }: Props) {
         )}
 
         {/* Actions */}
-        <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
+        <div style={{ display: "flex", gap: 12 }}>
           <button
             onClick={onClose}
             style={{
@@ -276,10 +345,10 @@ export default function CreateCollectionModal({ onClose, onCreated }: Props) {
             キャンセル
           </button>
           <button
-            onClick={handleCreate}
+            onClick={handleUpdate}
             disabled={!name.trim() || loading || uploading}
             style={{
-              flex: 2,
+              flex: 1,
               background: name.trim() && !uploading ? C.primaryContainer : `${C.surfaceVariant}4d`,
               border: "none",
               borderRadius: 12,
@@ -289,10 +358,30 @@ export default function CreateCollectionModal({ onClose, onCreated }: Props) {
               fontSize: 15,
               cursor: name.trim() && !uploading ? "pointer" : "default",
               fontFamily: F.family,
-              transition: "all 0.2s",
             }}
           >
-            {loading ? "作成中..." : "作成する"}
+            {loading ? "保存中..." : "保存"}
+          </button>
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={loading}
+            style={{
+              background: "#f87171",
+              border: "none",
+              borderRadius: 12,
+              padding: "12px 20px",
+              color: "white",
+              fontWeight: 700,
+              fontSize: 15,
+              cursor: loading ? "default" : "pointer",
+              fontFamily: F.family,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <Icon name="delete" size={18} />
+            削除
           </button>
         </div>
       </div>

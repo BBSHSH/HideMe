@@ -1,13 +1,10 @@
 import { Outlet } from 'react-router-dom'
 import Header from '../components/Header'
-import type { User } from '../App'
+import { useAuth } from '../context/AuthContext'
 
-type Props = {
-  user: User | null
-  onLogout: () => void
-}
+export default function Layout() {
+  const { logout } = useAuth()
 
-export default function Layout({ user, onLogout }: Props) {
   return (
     <div className="min-h-screen bg-[#12131b] text-white">
       <style>{`
@@ -47,7 +44,7 @@ export default function Layout({ user, onLogout }: Props) {
         .animate-pulse { animation: pulse 2s cubic-bezier(0.4,0,0.6,1) infinite; }
       `}</style>
 
-      <Header user={user ?? {}} onLogout={onLogout} />
+      <Header onLogout={logout} />
 
       {/* Header height: 72px を paddingTop で確保 */}
       <main style={{ paddingTop: 72 }}>

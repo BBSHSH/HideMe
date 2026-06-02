@@ -4,6 +4,7 @@ import { Icon } from "../../components/Icon";
 import { useFileList } from "../../hooks/useFiles";
 import { getDownloadUrl } from "../../api/files";
 import { useCollections } from "../../hooks/useFiles";
+import { useNavigate } from "react-router-dom";
 import CreateCollectionModal from "../../components/file/CreateCollectionModal";
 import { formatBytes, formatRelativeTime } from "../../utils/format";
 // ─── CollectionCard ───────────────────────────────────────────────────────────
@@ -12,6 +13,7 @@ function CollectionGrid() {
   const { collections, loading, error } = useCollections();
   const [showModal, setShowModal] = useState(false);
   const [, forceRefresh] = useState(0);
+  const navigate = useNavigate();
 
   const handleCreated = () => forceRefresh((n) => n + 1);
 
@@ -33,16 +35,22 @@ function CollectionGrid() {
       )}
       <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 20 }}>
         {collections.map((col) => (
-          <CollectionCard
+          <div
             key={col.ID}
-            title={col.Name}
-            subtitle={col.Description}
-            itemCount=""
-            badgeColor={col.Color || C.primary}
-            badgeBorder={`${col.Color || C.primary}4d`}
-            buttonColor={col.Color || C.primary}
-            iconFallback={col.Icon || "folder"}
-          />
+            onClick={() => navigate(`/file/collection/${col.ID}`)}
+            style={{ cursor: "pointer" }}
+          >
+            <CollectionCard
+              title={col.Name}
+              subtitle={col.Description}
+              itemCount=""
+              badgeColor={col.Color || C.primary}
+              badgeBorder={`${col.Color || C.primary}4d`}
+              buttonColor={col.Color || C.primary}
+              iconFallback={col.Icon || "folder"}
+              imageSrc={col.ImageURL}
+            />
+          </div>
         ))}
         <AddNewCard onClick={() => setShowModal(true)} />
       </div>

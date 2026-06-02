@@ -1,6 +1,7 @@
 import { NavLink } from "react-router-dom";
 import type { CSSProperties } from "react";
 import type { User } from "../App";
+import { useState } from "react";
 
 import { Icon } from "./Icon";
 import { C, F, glassPanel } from "../theme/tokens";
@@ -82,6 +83,7 @@ export default function Header({
   onNewProject,
   onLogout,
 }: HeaderProps) {
+  const [showMenu, setShowMenu] = useState(false);
   return (
     <header style={headerStyle}>
       {/* Logo */}
@@ -271,118 +273,109 @@ export default function Header({
         ))}
       </nav>
 
-      {/* Actions */}
+     {/* Actions */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "flex-end",
-
           gap: 12,
+          position: "relative",
         }}
       >
-        <button
-          onClick={onNewProject}
-          style={{
-            height: 40,
+        {/* ... New と notifications ボタンはそのまま ... */}
 
-            border: "none",
-            borderRadius: 12,
-
-            background: C.primaryContainer,
-            color: "#fff",
-
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-
-            padding: "0 16px",
-
-            cursor: "pointer",
-
-            fontWeight: 700,
-
-            transition:
-              "all .25s cubic-bezier(.22,1,.36,1)",
-
-            boxShadow:
-              "0 8px 24px rgba(88,101,242,.35)",
-          }}
-        >
-          <Icon
-            name="add"
-            size={18}
-            style={{ color: "#fff" }}
-          />
-
-          New
-        </button>
-
-        <button
-          style={{
-            width: 40,
-            height: 40,
-
-            borderRadius: 12,
-
-            border:
-              "1px solid rgba(255,255,255,.08)",
-
-            background:
-              "rgba(255,255,255,.04)",
-
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-
-            cursor: "pointer",
-
-            transition:
-              "all .25s cubic-bezier(.22,1,.36,1)",
-          }}
-        >
-          <Icon
-            name="notifications"
-            size={22}
+        {/* Account Menu */}
+        <div style={{ position: "relative" }}>
+          <button
+            onClick={() => setShowMenu(!showMenu)}
             style={{
-              color: C.onSurfaceVariant,
+              width: 40,
+              height: 40,
+              borderRadius: "50%",
+              border: "1px solid rgba(88,101,242,.3)",
+              background: "rgba(88,101,242,.15)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              transition: "all .45s cubic-bezier(.22,1,.36,1)",
             }}
-          />
-        </button>
+          >
+            <Icon
+              name="account_circle"
+              filled
+              size={24}
+              style={{
+                color: C.primary,
+              }}
+            />
+          </button>
 
-        <button
-          onClick={onLogout}
-          style={{
-            width: 40,
-            height: 40,
+          {/* Dropdown Menu */}
+          {showMenu && (
+            <>
+              {/* Backdrop */}
+              <div
+                onClick={() => setShowMenu(false)}
+                style={{
+                  position: "fixed",
+                  inset: 0,
+                  zIndex: 99,
+                }}
+              />
 
-            borderRadius: "50%",
-
-            border:
-              "1px solid rgba(88,101,242,.3)",
-
-            background:
-              "rgba(88,101,242,.15)",
-
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-
-            cursor: "pointer",
-
-            transition:
-              "all .45s cubic-bezier(.22,1,.36,1)",
-          }}
-        >
-          <Icon
-            name="account_circle"
-            filled
-            size={24}
-            style={{
-              color: C.primary,
-            }}
-          />
-        </button>
+              {/* Menu */}
+              <div
+                style={{
+                  position: "absolute",
+                  top: "100%",
+                  right: 0,
+                  marginTop: 12,
+                  minWidth: 200,
+                  background: "linear-gradient(180deg, rgba(30,31,48,0.95) 0%, rgba(18,19,27,0.95) 100%)",
+                  border: `1px solid ${C.outlineVariant}33`,
+                  borderRadius: 16,
+                  overflow: "hidden",
+                  zIndex: 100,
+                  boxShadow: "0 10px 40px rgba(0,0,0,0.6)",
+                }}
+              >
+                {/* Logout */}
+                <button
+                  onClick={() => {
+                    onLogout?.();
+                    setShowMenu(false);
+                  }}
+                  style={{
+                    width: "100%",
+                    background: "transparent",
+                    border: "none",
+                    padding: "12px 16px",
+                    color: "#f87171",
+                    fontSize: 14,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    transition: "all 0.2s",
+                    borderBottom: `1px solid ${C.outlineVariant}1a`,
+                  }}
+                  onMouseOver={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background = "rgba(248,107,107,0.1)";
+                  }}
+                  onMouseOut={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                  }}
+                >
+                  <Icon name="logout" size={18} />
+                  ログアウト
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </header>
   );

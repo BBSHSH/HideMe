@@ -11,9 +11,9 @@ import (
 )
 
 type FileItem struct {
-	Name     string `json:"name"`
-	Size     int64  `json:"size"`
-	Modified string `json:"modified"`
+	Name     string    `json:"name"`
+	Size     int64     `json:"size"`
+	Modified time.Time `json:"modified"`
 }
 
 func ListFiles(store storage.Storage) gin.HandlerFunc {
@@ -31,7 +31,7 @@ func ListFiles(store storage.Storage) gin.HandlerFunc {
 			response = append(response, FileItem{
 				Name:     item.Name,
 				Size:     item.Size,
-				Modified: item.Modified.UTC().Format(time.RFC3339),
+				Modified: item.Modified,
 			})
 		}
 
@@ -60,7 +60,13 @@ func UploadFile(store storage.Storage) gin.HandlerFunc {
 		}
 		defer src.Close()
 
-		item, err := store.Upload(c.Request.Context(), file.Filename, src, file.Size)
+		item, err := store.Upload(
+			c.Request.Context(),
+			file.Filename,
+			src,
+			file.Size,
+		)
+
 		if err != nil {
 			if errors.Is(err, storage.ErrFileTooLarge) {
 				c.JSON(http.StatusRequestEntityTooLarge, gin.H{
@@ -68,16 +74,17 @@ func UploadFile(store storage.Storage) gin.HandlerFunc {
 				})
 				return
 			}
+
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "failed_to_save_file",
 			})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"name":     item.Name,
-			"size":     item.Size,
-			"uploaded": true,
+		c.JSON(http.StatusCreated, gin.H{
+			"file_name": item.Name,
+			"file_size": item.Size,
+			"uploaded":  true,
 		})
 	}
 }
@@ -92,6 +99,7 @@ func DownloadFile(store storage.Storage) gin.HandlerFunc {
 				})
 				return
 			}
+
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "failed_to_open_file",
 			})
@@ -99,7 +107,17 @@ func DownloadFile(store storage.Storage) gin.HandlerFunc {
 		}
 		defer reader.Close()
 
-		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", item.Name))
-		c.DataFromReader(http.StatusOK, item.Size, "application/octet-stream", reader, nil)
+		c.Header(
+			"Content-Disposition",
+			fmt.Sprintf("attachment; filename=\"%s\"", item.Name),
+		)
+
+		c.DataFromReader(
+			http.StatusOK,
+			item.Size,
+			"application/octet-stream",
+			reader,
+			nil,
+		)
 	}
 }

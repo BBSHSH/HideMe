@@ -9,12 +9,12 @@ import (
 )
 
 type CollectionFile struct {
-	ID           string
-	CollectionID string
-	FileName     string
-	FileSize     int64
-	UploadedBy   string
-	UploadedAt   time.Time
+	ID           string    `json:"id"`
+	CollectionID string    `json:"collection_id"`
+	FileName     string    `json:"file_name"`
+	FileSize     int64     `json:"file_size"`
+	UploadedBy   string    `json:"uploaded_by"`
+	UploadedAt   time.Time `json:"uploaded_at"`
 }
 
 var ErrFileNotFound = errors.New("file not found")

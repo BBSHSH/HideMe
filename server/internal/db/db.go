@@ -36,7 +36,8 @@ func migrate(db *sql.DB) error {
 			name        TEXT NOT NULL,
 			description TEXT,
 			color       TEXT,
-			icon        TEXT
+			icon        TEXT,
+			image_url   TEXT
 		);
 
 		CREATE TABLE IF NOT EXISTS collection_files (

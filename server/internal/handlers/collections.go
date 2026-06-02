@@ -2,10 +2,15 @@ package handlers
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
+	"path/filepath"
+	"strings"
 
 	"github.com/BBSHSH/HideMe/server/internal/db"
+	"github.com/BBSHSH/HideMe/server/internal/storage"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func ListCollections(database *sql.DB) gin.HandlerFunc {
@@ -26,17 +31,52 @@ func CreateCollection(database *sql.DB) gin.HandlerFunc {
 			Description string `json:"description"`
 			Color       string `json:"color"`
 			Icon        string `json:"icon"`
+			ImageURL    string `json:"image_url"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request"})
 			return
 		}
-		col, err := db.CreateCollection(database, body.Name, body.Description, body.Color, body.Icon)
+		col, err := db.CreateCollection(database, body.Name, body.Description, body.Color, body.Icon, body.ImageURL)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_create_collection"})
 			return
 		}
-		c.JSON(http.StatusOK, col)
+		c.JSON(http.StatusCreated, col)
+	}
+}
+
+func UploadCollectionImage(store storage.Storage) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		file, err := c.FormFile("image")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "image_required"})
+			return
+		}
+
+		ext := strings.ToLower(filepath.Ext(file.Filename))
+		switch ext {
+		case ".jpg", ".jpeg", ".png", ".webp", ".gif":
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported_format"})
+			return
+		}
+
+		src, err := file.Open()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_open_file"})
+			return
+		}
+		defer src.Close()
+
+		filename := fmt.Sprintf("collection-icons/%s%s", uuid.NewString(), ext)
+		item, err := store.Upload(c.Request.Context(), filename, src, file.Size)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_upload_image"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"image_url": item.Name})
 	}
 }
 
@@ -48,12 +88,13 @@ func UpdateCollection(database *sql.DB) gin.HandlerFunc {
 			Description string `json:"description"`
 			Color       string `json:"color"`
 			Icon        string `json:"icon"`
+			ImageURL    string `json:"image_url"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request"})
 			return
 		}
-		if err := db.UpdateCollection(database, id, body.Name, body.Description, body.Color, body.Icon); err != nil {
+		if err := db.UpdateCollection(database, id, body.Name, body.Description, body.Color, body.Icon, body.ImageURL); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_update_collection"})
 			return
 		}

@@ -4,8 +4,16 @@ export type Collection = {
   Description: string;
   Color: string;
   Icon: string;
+  ImageURL?: string;
 };
-
+export type CollectionFile = {
+  id: string;
+  collection_id: string;
+  file_name: string;
+  file_size: number;
+  uploaded_by: string;
+  uploaded_at: string;
+};
 export type SidebarItem = {
   id: string;
   icon: string;

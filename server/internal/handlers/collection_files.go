@@ -3,9 +3,12 @@ package handlers
 import (
 	"database/sql"
 	"errors"
+	"log"
 	"net/http"
 
+	"github.com/BBSHSH/HideMe/server/internal/auth"
 	"github.com/BBSHSH/HideMe/server/internal/db"
+	"github.com/BBSHSH/HideMe/server/internal/middleware"
 	"github.com/BBSHSH/HideMe/server/internal/storage"
 	"github.com/gin-gonic/gin"
 )
@@ -25,6 +28,7 @@ func ListCollectionFiles(database *sql.DB) gin.HandlerFunc {
 func UploadToCollection(store storage.Storage, database *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		collectionID := c.Param("id")
+		log.Printf("[DEBUG] UploadToCollection: collectionID=%s", collectionID)
 
 		// コレクション存在確認
 		if _, err := db.GetCollectionByID(database, collectionID); err != nil {
@@ -32,18 +36,21 @@ func UploadToCollection(store storage.Storage, database *sql.DB) gin.HandlerFunc
 				c.JSON(http.StatusNotFound, gin.H{"error": "collection_not_found"})
 				return
 			}
+			log.Printf("[ERROR] GetCollectionByID: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_get_collection"})
 			return
 		}
 
 		file, err := c.FormFile("file")
 		if err != nil {
+			log.Printf("[ERROR] FormFile: %v", err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "file_required"})
 			return
 		}
 
 		src, err := file.Open()
 		if err != nil {
+			log.Printf("[ERROR] file.Open: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_open_file"})
 			return
 		}
@@ -56,21 +63,31 @@ func UploadToCollection(store storage.Storage, database *sql.DB) gin.HandlerFunc
 				c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "file_too_large"})
 				return
 			}
+			log.Printf("[ERROR] store.Upload: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_save_file"})
 			return
 		}
 
-		// DBに記録 (uploaded_by は認証実装後に差し替え)
-		cf, err := db.AddFileToCollection(database, collectionID, item.Name, item.Size, "")
+		// ユーザーIDを取得（認証ミドルウェアから）
+		claims, ok := c.Get(middleware.ClaimsKey)
+		userID := ""
+		if ok && claims != nil {
+			userID = claims.(*auth.Claims).UserID
+		}
+		log.Printf("[DEBUG] userID=%s, fileName=%s, fileSize=%d", userID, item.Name, item.Size)
+
+		// DBに記録
+		cf, err := db.AddFileToCollection(database, collectionID, item.Name, item.Size, userID)
 		if err != nil {
+			log.Printf("[ERROR] AddFileToCollection: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_record_file"})
 			return
 		}
 
+		log.Printf("[DEBUG] AddFileToCollection success: id=%s", cf.ID)
 		c.JSON(http.StatusOK, cf)
 	}
 }
-
 func DeleteCollectionFile(store storage.Storage, database *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		fileID := c.Param("fileID")
