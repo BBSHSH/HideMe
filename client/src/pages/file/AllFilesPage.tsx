@@ -1,73 +1,11 @@
-import { useState } from "react";
 import { C, F, glassPanel } from "../../theme/tokens";
 import { Icon } from "../../components/Icon";
 import { useFileList } from "../../hooks/useFiles";
 import { getDownloadUrl } from "../../api/files";
-import { useCollections } from "../../hooks/useFiles";
-import { useNavigate } from "react-router-dom";
-import CreateCollectionModal from "../../components/file/CreateCollectionModal";
+import CollectionGrid from "../../components/file/CollectionGrid"; // ← インポート
+import RecentFileRow from "../../components/file/RecentFileRow"; // ← インポート
 import { formatBytes, formatRelativeTime } from "../../utils/format";
-// ─── CollectionCard ───────────────────────────────────────────────────────────
 
-function CollectionGrid() {
-  const { collections, loading, error } = useCollections();
-  const [showModal, setShowModal] = useState(false);
-  const [, forceRefresh] = useState(0);
-  const navigate = useNavigate();
-
-  const handleCreated = () => forceRefresh((n) => n + 1);
-
-  if (loading) return (
-    <div style={{ color: C.outlineVariant, padding: 32, textAlign: "center" }}>Loading...</div>
-  );
-
-  if (error) return (
-    <div style={{ color: "#f87171", padding: 32, textAlign: "center" }}>Failed to load collections</div>
-  );
-
-  return (
-    <>
-      {showModal && (
-        <CreateCollectionModal
-          onClose={() => setShowModal(false)}
-          onCreated={handleCreated}
-        />
-      )}
-      <div style={{display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 20 }}>
-        {collections.map((col) => (
-          <div
-            key={col.ID}
-            onClick={() => navigate(`/file/collection/${col.ID}`)}
-            style={{ cursor: "pointer" }}
-          >
-            <CollectionCard
-              title={col.Name}
-              subtitle={col.Description}
-              itemCount=""
-              badgeColor={col.Color || C.primary}
-              badgeBorder={`${col.Color || C.primary}4d`}
-              buttonColor={col.Color || C.primary}
-              iconFallback={col.Icon || "folder"}
-              imageSrc={col.ImageURL}
-            />
-          </div>
-        ))}
-        <AddNewCard onClick={() => setShowModal(true)} />
-      </div>
-    </>
-  );
-}
-interface CollectionCardProps {
-  title:        string;
-  subtitle:     string;
-  itemCount:    string;
-  badgeColor:   string;
-  badgeBorder:  string;
-  buttonColor:  string;
-  imageSrc?:    string;
-  iconFallback?: string;
-  iconBg?:      string;
-}
 
 function RecentActivityList() {
   const { files, loading, error } = useFileList();
@@ -92,264 +30,19 @@ function RecentActivityList() {
 
   return (
     <>
-      {files.map((file, i) => (
-        <div key={file.name}>
-          {i > 0 && <div style={{ height: 1, background: `${C.outlineVariant}0d` }} />}
+      {files.map((file) => (
+        <div key={file.id}>
           <RecentFileRow
             icon="insert_drive_file"
             iconColor={C.primary}
-            name={file.name}
-            meta={`Uploaded ${formatRelativeTime(file.modified)} • ${formatBytes(file.size)}`}
-            downloadUrl={getDownloadUrl(file.name)}
+            name={file.file_name}
+            meta={`Uploaded ${formatRelativeTime(file.uploaded_at)} • ${formatBytes(file.file_size)}`}
+            downloadUrl={getDownloadUrl(file.file_name)}
           />
+          <div style={{ height: 1, background: `${C.outlineVariant}0d` }} />
         </div>
       ))}
     </>
-  );
-}
-
-function CollectionCard({
-  title, subtitle, itemCount,
-  badgeColor, badgeBorder, buttonColor,
-  imageSrc, iconFallback, iconBg,
-}: CollectionCardProps) {
-  const [hovered, setHovered] = useState(false);
-
-  return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        ...glassPanel,
-        display:    "flex",
-        flexDirection: "column",
-        cursor:     "pointer",
-        transform:  hovered ? "translateY(-8px)" : "translateY(0)",
-        borderColor: hovered ? "rgba(88,101,242,0.4)" : "rgba(69,70,85,0.4)",
-        background: hovered
-          ? "rgba(88,101,242,0.08)"
-          : "linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 100%)",
-        boxShadow:  hovered ? "0 20px 40px -20px rgba(88,101,242,0.3)" : "none",
-        transition: "all 0.4s cubic-bezier(0.4,0,0.2,1)",
-        overflow:   "hidden",
-      }}
-    >
-      {/* Thumbnail */}
-      <div
-        style={{
-          height:     224,
-          background: iconBg ?? C.surfaceVariant,
-          position:   "relative",
-          overflow:   "hidden",
-          display:    "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <div
-          style={{
-            position:   "absolute",
-            inset:      0,
-            background: "linear-gradient(to top, #12131b, transparent)",
-            opacity:    0.6,
-            zIndex:     1,
-          }}
-        />
-        {imageSrc ? (
-          <img
-            src={imageSrc}
-            alt={title}
-            style={{
-              width:      "100%",
-              height:     "100%",
-              objectFit:  "cover",
-              transform:  hovered ? "scale(1.1)" : "scale(1)",
-              transition: "transform 0.7s",
-            }}
-          />
-        ) : (
-          <Icon
-            name={iconFallback ?? "folder"}
-            size={100}
-            style={{
-              color:      `${C.onSurface}33`,
-              transform:  hovered ? "scale(1.1)" : "scale(1)",
-              transition: "transform 0.7s",
-            }}
-          />
-        )}
-        {/* Badge */}
-        <div style={{ position: "absolute", top: 16, right: 16, zIndex: 2 }}>
-          <span
-            style={{
-              background:     "rgba(0,0,0,0.6)",
-              backdropFilter: "blur(8px)",
-              color:          badgeColor,
-              padding:        "4px 12px",
-              borderRadius:   9999,
-              fontSize:       12,
-              fontWeight:     700,
-              border:         `1px solid ${badgeBorder}`,
-            }}
-          >
-            {itemCount}
-          </span>
-        </div>
-      </div>
-
-      {/* Body */}
-      <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: C.onSurface, letterSpacing: "-0.02em" }}>
-              {title}
-            </h3>
-            <p style={{ margin: "4px 0 0", fontSize: 14, color: C.onSurfaceVariant }}>
-              {subtitle}
-            </p>
-          </div>
-          <button
-            style={{ background: "none", border: "none", color: C.onSurfaceVariant, cursor: "pointer", padding: 4 }}
-          >
-            <Icon name="more_vert" size={20} />
-          </button>
-        </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <button
-            style={{
-              flex:         1,
-              background:   `${buttonColor}1a`,
-              color:        buttonColor,
-              border:       "none",
-              borderRadius: 12,
-              padding:      "8px 0",
-              fontWeight:   700,
-              fontSize:     14,
-              cursor:       "pointer",
-              fontFamily:   F.family,
-              transition:   "background 0.2s",
-            }}
-          >
-            Quick Edit
-          </button>
-          <button
-            style={{
-              background:   `${C.surfaceVariant}4d`,
-              border:       "none",
-              borderRadius: 12,
-              padding:      8,
-              color:        C.onSurface,
-              cursor:       "pointer",
-              display:      "flex",
-              alignItems:   "center",
-              justifyContent: "center",
-            }}
-          >
-            <Icon name="share" size={18} />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── AddNewCard ───────────────────────────────────────────────────────────────
-function AddNewCard({ onClick }: { onClick: () => void }) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <div
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        border: `2px dashed ${hovered ? `${C.primary}80` : `${C.outlineVariant}4d`}`,
-        borderRadius: 16,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 40,
-        gap: 16,
-        cursor: "pointer",
-        background: hovered ? `${C.primary}0d` : "transparent",
-        transition: "all 0.3s",
-        minHeight: 300,  
-      }}
-    >
-      <div
-        style={{
-          width:          80,
-          height:         80,
-          borderRadius:   9999,
-          background:     hovered ? C.primaryContainer : C.surfaceVariant,
-          color:          hovered ? C.onPrimaryContainer : C.onSurface,
-          display:        "flex",
-          alignItems:     "center",
-          justifyContent: "center",
-          transition:     "all 0.3s",
-        }}
-      >
-        <Icon name="add" size={40} />
-      </div>
-      <div style={{ textAlign: "center" }}>
-        <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: C.onSurface }}>Create New</h3>
-        <p style={{ margin: "4px 0 0", fontSize: 14, color: C.onSurfaceVariant }}>Organize your content</p>
-      </div>
-    </div>
-  );
-}
-
-// ─── RecentFileRow ────────────────────────────────────────────────────────────
-function RecentFileRow({ icon, iconColor, name, meta, downloadUrl }: {
-  icon: string; iconColor: string; name: string; meta: string; downloadUrl: string;
-}) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        padding:        "16px 20px",
-        display:        "flex",
-        alignItems:     "center",
-        justifyContent: "space-between",
-        background:     hovered ? "rgba(255,255,255,0.03)" : "transparent",
-        transition:     "background 0.2s",
-        cursor:         "pointer",
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-        <div
-          style={{
-            width:          52,
-            height:         52,
-            borderRadius:   12,
-            background:     C.surfaceContainer,
-            border:         `1px solid ${C.outlineVariant}1a`,
-            display:        "flex",
-            alignItems:     "center",
-            justifyContent: "center",
-          }}
-        >
-          <Icon name={icon} size={24} style={{ color: iconColor }} />
-        </div>
-        <div>
-          <h4 style={{ margin: 0, fontWeight: 700, fontSize: 16, color: C.onSurface }}>{name}</h4>
-          <p style={{ margin: "2px 0 0", fontSize: 13, color: C.outline }}>{meta}</p>
-        </div>
-      </div>
-      <div style={{ display: "flex", gap: 4 }}>
-        <button
-          style={{ background: "none", border: "none", color: C.onSurfaceVariant, cursor: "pointer", padding: 8 }}
-          onClick={() => window.open(downloadUrl, "_blank")}
-        >
-          <Icon name="download" size={20} />
-        </button>
-        <button style={{ background: "none", border: "none", color: C.onSurfaceVariant, cursor: "pointer", padding: 8 }}>
-          <Icon name="delete" size={20} />
-        </button>
-      </div>
-    </div>
   );
 }
 
@@ -357,7 +50,6 @@ function RecentFileRow({ icon, iconColor, name, meta, downloadUrl }: {
 export default function AllFilesPage() {
   return (
     <div style={{ padding: 48, display: "flex", flexDirection: "column", gap: 48 }}>
-
       {/* Page header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -373,18 +65,18 @@ export default function AllFilesPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <button
             style={{
-              background:   C.surfaceVariant,
-              color:        C.onSurface,
-              border:       `1px solid ${C.outlineVariant}33`,
+              background: C.surfaceVariant,
+              color: C.onSurface,
+              border: `1px solid ${C.outlineVariant}33`,
               borderRadius: 24,
-              padding:      "14px 24px",
-              fontWeight:   700,
-              fontSize:     15,
-              display:      "flex",
-              alignItems:   "center",
-              gap:          10,
-              cursor:       "pointer",
-              fontFamily:   F.family,
+              padding: "14px 24px",
+              fontWeight: 700,
+              fontSize: 15,
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              cursor: "pointer",
+              fontFamily: F.family,
             }}
           >
             <Icon name="create_new_folder" size={20} />
@@ -392,19 +84,19 @@ export default function AllFilesPage() {
           </button>
           <button
             style={{
-              background:   C.primaryContainer,
-              color:        C.onPrimaryContainer,
-              border:       "none",
+              background: C.primaryContainer,
+              color: C.onPrimaryContainer,
+              border: "none",
               borderRadius: 24,
-              padding:      "14px 24px",
-              fontWeight:   800,
-              fontSize:     15,
-              display:      "flex",
-              alignItems:   "center",
-              gap:          10,
-              cursor:       "pointer",
-              fontFamily:   F.family,
-              boxShadow:    "0 25px 50px -12px rgba(88,101,242,0.4)",
+              padding: "14px 24px",
+              fontWeight: 800,
+              fontSize: 15,
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              cursor: "pointer",
+              fontFamily: F.family,
+              boxShadow: "0 25px 50px -12px rgba(88,101,242,0.4)",
             }}
           >
             <Icon name="cloud_upload" size={20} />
@@ -414,16 +106,7 @@ export default function AllFilesPage() {
       </div>
 
       {/* Stats bar */}
-      <div
-        style={{
-          ...glassPanel,
-          padding:        20,
-          display:        "flex",
-          alignItems:     "center",
-          justifyContent: "space-between",
-          gap:            32,
-        }}
-      >
+      <div style={{ ...glassPanel, padding: 20, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 32 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 32 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <span style={{ color: C.outlineVariant, fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.05em" }}>
@@ -455,24 +138,14 @@ export default function AllFilesPage() {
           <button style={{ padding: 10, background: "none", border: "none", color: C.onSurfaceVariant, borderRadius: 10, cursor: "pointer" }}>
             <Icon name="list" />
           </button>
-          <button
-            style={{
-              padding:      10,
-              background:   `${C.primary}1a`,
-              border:       `1px solid ${C.primary}33`,
-              color:        C.primary,
-              borderRadius: 10,
-              cursor:       "pointer",
-            }}
-          >
+          <button style={{ padding: 10, background: `${C.primary}1a`, border: `1px solid ${C.primary}33`, color: C.primary, borderRadius: 10, cursor: "pointer" }}>
             <Icon name="grid_view" />
           </button>
         </div>
       </div>
 
-
-      {/* カテゴリの表示 */}
-        <CollectionGrid />
+      {/* Collection Grid */}
+      <CollectionGrid />
 
       {/* Recent activity */}
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -480,59 +153,22 @@ export default function AllFilesPage() {
           Recent Activity
         </h2>
         <div style={{ ...glassPanel, overflow: "hidden", border: `1px solid ${C.outlineVariant}1a` }}>
-          <div
-            style={{
-              padding: "16px 20px",
-              borderBottom: `1px solid ${C.outlineVariant}1a`,
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              background: "rgba(255,255,255,0.03)",
-            }}
-          >
+          <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.outlineVariant}1a`, display: "flex", alignItems: "center", gap: 10, background: "rgba(255,255,255,0.03)" }}>
             <Icon name="history" style={{ color: C.primary }} />
             <span style={{ fontWeight: 700, fontSize: 16 }}>Latest files uploaded to vault</span>
           </div>
-
           <RecentActivityList />
         </div>
       </div>
 
       {/* Vault status toast */}
-      <div
-        style={{
-          position:       "fixed",
-          bottom:         32,
-          right:          32,
-          background:     "linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 100%)",
-          backdropFilter: "blur(40px)",
-          padding:        "12px 20px",
-          borderRadius:   24,
-          display:        "flex",
-          alignItems:     "center",
-          gap:            16,
-          boxShadow:      "0 0 20px rgba(88,101,242,0.3), 0 25px 50px -12px rgba(0,0,0,0.5)",
-          border:         `1px solid ${C.primary}33`,
-          zIndex:         60,
-        }}
-      >
+      <div style={{ position: "fixed", bottom: 32, right: 32, background: "linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 100%)", backdropFilter: "blur(40px)", padding: "12px 20px", borderRadius: 24, display: "flex", alignItems: "center", gap: 16, boxShadow: "0 0 20px rgba(88,101,242,0.3), 0 25px 50px -12px rgba(0,0,0,0.5)", border: `1px solid ${C.primary}33`, zIndex: 60 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span
-            style={{
-              width:        12,
-              height:       12,
-              background:   "#22c55e",
-              borderRadius: 9999,
-              boxShadow:    "0 0 10px rgba(34,197,94,0.8)",
-              animation:    "pulse 2s infinite",
-            }}
-          />
+          <span style={{ width: 12, height: 12, background: "#22c55e", borderRadius: 9999, boxShadow: "0 0 10px rgba(34,197,94,0.8)", animation: "pulse 2s infinite" }} />
           <span style={{ fontSize: 14, fontWeight: 800, color: C.onSurface }}>Vault Sync Active</span>
         </div>
         <div style={{ width: 1, height: 28, background: `${C.outlineVariant}33` }} />
-        <span style={{ fontSize: 12, fontWeight: 600, color: C.outlineVariant, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          Last sync: 2m ago
-        </span>
+        <span style={{ fontSize: 12, fontWeight: 600, color: C.outlineVariant, textTransform: "uppercase", letterSpacing: "0.05em" }}>Last sync: 2m ago</span>
       </div>
     </div>
   );

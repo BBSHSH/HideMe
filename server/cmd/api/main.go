@@ -58,14 +58,13 @@ func main() {
 	api.GET("/files", handlers.ListFiles(store))
 	api.POST("/files/upload", handlers.UploadFile(store))
 	api.GET("/files/:name", handlers.DownloadFile(store))
-
+	api.GET("/files/all", handlers.ListAllFiles(database))
 	// collections (adminのみ)
 	api.GET("/collections", handlers.ListCollections(database))
 	api.POST("/collections/upload-image", middleware.RequireAuth(), middleware.RequireAdmin(), handlers.UploadCollectionImage(store))
 	api.POST("/collections", middleware.RequireAuth(), middleware.RequireAdmin(), handlers.CreateCollection(database))
 	api.PUT("/collections/:id", middleware.RequireAuth(), middleware.RequireAdmin(), handlers.UpdateCollection(database))
-	api.DELETE("/collections/:id", middleware.RequireAuth(), middleware.RequireAdmin(), handlers.DeleteCollection(database))
-
+	api.DELETE("/collections/:id", middleware.RequireAuth(), middleware.RequireAdmin(), handlers.DeleteCollection(database, store))
 	// collection files
 	api.GET("/collections/:id/files", handlers.ListCollectionFiles(database))
 	api.POST("/collections/:id/files", middleware.RequireAuth(), handlers.UploadToCollection(store, database))

@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -102,9 +103,26 @@ func UpdateCollection(database *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func DeleteCollection(database *sql.DB) gin.HandlerFunc {
+func DeleteCollection(database *sql.DB, store storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
+
+		// コレクション内の全ファイルを取得
+		files, err := db.ListFilesByCollection(database, id)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_list_files"})
+			return
+		}
+
+		// NAS から各ファイルを削除
+		for _, file := range files {
+			if err := store.Delete(c.Request.Context(), file.FileName); err != nil {
+				log.Printf("[WARN] Failed to delete file from NAS: %s, %v", file.FileName, err)
+				// NAS 削除失敗は続行（DB は削除する）
+			}
+		}
+
+		// DB から削除（ON DELETE CASCADE で collection_files も自動削除）
 		if err := db.DeleteCollection(database, id); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_delete_collection"})
 			return

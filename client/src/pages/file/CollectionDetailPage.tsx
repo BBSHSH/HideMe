@@ -24,9 +24,24 @@ export default function CollectionDetailPage() {
       </div>
     );
   }
-
+  const handleCollectionUpdated = () => {
+    // コレクション一覧を再取得するために、ページをリロード
+    window.location.reload();
+  };
+  const handleCollectionDeleted = () => {
+    // 削除後は /file に戻る
+    navigate("/file");
+  };
   return (
     <div style={{ padding: 48, display: "flex", flexDirection: "column", gap: 32 }}>
+      {openEdit && (
+        <EditCollectionModal
+          collection={collection}
+          onClose={() => setOpenEdit(false)}
+          onUpdated={handleCollectionUpdated}
+          onDeleted={handleCollectionDeleted}
+        />
+      )}
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
         <div
@@ -59,49 +74,52 @@ export default function CollectionDetailPage() {
           <p style={{ margin: 0, fontSize: 16, color: C.outlineVariant }}>
             {collection.Description}
           </p>
-          <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
-            <button
-              onClick={() => navigate("/file")}
-              style={{
-                background: C.surfaceVariant,
-                color: C.onSurface,
-                border: `1px solid ${C.outlineVariant}33`,
-                borderRadius: 12,
-                padding: "10px 20px",
-                fontWeight: 700,
-                fontSize: 14,
-                cursor: "pointer",
-                fontFamily: F.family,
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <Icon name="arrow_back" size={18} />
-              戻る
-            </button>
-            {isAdmin && (
-          <button
-            onClick={() => setOpenEdit(true)}
-            style={{
-              background: C.primaryContainer,
-              color: C.onPrimaryContainer,
-              border: "none",
-              borderRadius: 12,
-              padding: "10px 20px",
-              fontWeight: 700,
-              fontSize: 14,
-              cursor: "pointer",
-              fontFamily: F.family,
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            <Icon name="edit" size={18} />
-            編集
-          </button>
-            )}
+            <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+            {/* ... 既存のコード ... */}
+            <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
+              <button
+                onClick={() => navigate("/file")}
+                style={{
+                  background: C.surfaceVariant,
+                  color: C.onSurface,
+                  border: `1px solid ${C.outlineVariant}33`,
+                  borderRadius: 12,
+                  padding: "10px 20px",
+                  fontWeight: 700,
+                  fontSize: 14,
+                  cursor: "pointer",
+                  fontFamily: F.family,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <Icon name="arrow_back" size={18} />
+                戻る
+              </button>
+              {isAdmin && (
+                <button
+                  onClick={() => setOpenEdit(true)}
+                  style={{
+                    background: C.primaryContainer,
+                    color: C.onPrimaryContainer,
+                    border: "none",
+                    borderRadius: 12,
+                    padding: "10px 20px",
+                    fontWeight: 700,
+                    fontSize: 14,
+                    cursor: "pointer",
+                    fontFamily: F.family,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <Icon name="edit" size={18} />
+                  編集
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

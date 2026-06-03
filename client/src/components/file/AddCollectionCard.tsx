@@ -1,12 +1,21 @@
 import { useState } from "react";
+import { C } from "../../theme/tokens";
+import { Icon } from "../Icon";
 
-export default function AddCollectionCard() {
+interface AddCollectionCardProps {
+  onClick: () => void;
+}
+
+export default function AddCollectionCard({ onClick }: AddCollectionCardProps) {
   const [hovered, setHovered] = useState(false);
 
   return (
     <div
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
-        border: `2px dashed ${hovered ? `#bec2ff80` : `#4546554d`}`,
+        border: `2px dashed ${hovered ? `${C.primary}80` : `${C.outlineVariant}4d`}`,
         borderRadius: 16,
         display: "flex",
         flexDirection: "column",
@@ -15,32 +24,29 @@ export default function AddCollectionCard() {
         padding: 40,
         gap: 16,
         cursor: "pointer",
-        background: hovered ? `#bec2ff0d` : "transparent",
+        background: hovered ? `${C.primary}0d` : "transparent",
         transition: "all 0.3s",
+        minHeight: 300,
       }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
     >
       <div
         style={{
           width: 80,
           height: 80,
           borderRadius: 9999,
-          background: hovered ? "#5865f2" : "#34343d",
-          color: hovered ? "#fffdff" : "#e3e1ed",
+          background: hovered ? C.primaryContainer : C.surfaceVariant,
+          color: hovered ? C.onPrimaryContainer : C.onSurface,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           transition: "all 0.3s",
-          fontSize: 40,
         }}
-        className="material-symbols-outlined"
       >
-        add
+        <Icon name="add" size={40} />
       </div>
       <div style={{ textAlign: "center" }}>
-        <h3 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "#e3e1ed" }}>Create New</h3>
-        <p style={{ margin: "4px 0 0", fontSize: 16, color: "#c6c5d7" }}>Organize your content</p>
+        <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: C.onSurface }}>Create New</h3>
+        <p style={{ margin: "4px 0 0", fontSize: 14, color: C.onSurfaceVariant }}>Organize your content</p>
       </div>
     </div>
   );

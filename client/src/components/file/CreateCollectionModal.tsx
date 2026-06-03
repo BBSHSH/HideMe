@@ -147,7 +147,7 @@ export default function CreateCollectionModal({ onClose, onCreated }: Props) {
                   style={{ width: "100%", height: "100%", objectFit: "cover" }}
                 />
               ) : (
-                <Icon name="add_photo_alternate" size={28} color={C.outlineVariant} />
+                <Icon name="add_photo_alternate" size={28} />
               )}
             </div>
 

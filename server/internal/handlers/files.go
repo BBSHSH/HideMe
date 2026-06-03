@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/BBSHSH/HideMe/server/internal/db"
 	"github.com/BBSHSH/HideMe/server/internal/storage"
 	"github.com/gin-gonic/gin"
 )
@@ -38,6 +40,35 @@ func ListFiles(store storage.Storage) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{
 			"items": response,
 		})
+	}
+}
+
+func ListAllFiles(database *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 全コレクションから全ファイルを取得（最新順）
+		rows, err := database.Query(`
+			SELECT id, collection_id, file_name, file_size, uploaded_by, uploaded_at 
+			FROM collection_files 
+			ORDER BY uploaded_at DESC 
+			LIMIT 100
+		`)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_list_files"})
+			return
+		}
+		defer rows.Close()
+
+		var files []db.CollectionFile
+		for rows.Next() {
+			var f db.CollectionFile
+			if err := rows.Scan(&f.ID, &f.CollectionID, &f.FileName, &f.FileSize, &f.UploadedBy, &f.UploadedAt); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_scan_files"})
+				return
+			}
+			files = append(files, f)
+		}
+
+		c.JSON(http.StatusOK, gin.H{"items": files})
 	}
 }
 

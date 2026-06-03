@@ -22,12 +22,36 @@ export const listCollections = () =>
 export const createCollection = (input: CreateCollectionInput) =>
   apiPost<Collection>("/v1/collections", input);
 
-export const updateCollection = (id: string, input: CreateCollectionInput) =>
-  apiPost<{ updated: boolean }>(`/v1/collections/${id}`, input);
-
-export const deleteCollection = (id: string) =>
-  apiPost<{ deleted: boolean }>(`/v1/collections/${id}`, {});
-
+export const updateCollection = (id: string, input: CreateCollectionInput) => {
+  return fetch(
+    `${import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080"}/v1/collections/${id}`,
+    {
+      method: "PUT",  // ← POST から PUT に変更
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${JSON.parse(localStorage.getItem("hideme_auth") || "{}").token}`,
+      },
+      body: JSON.stringify(input),
+    }
+  ).then((res) => {
+    if (!res.ok) throw new Error(`Update failed: ${res.status}`);
+    return res.json() as Promise<{ updated: boolean }>;
+  });
+};
+export const deleteCollection = (id: string) => {
+  return fetch(
+    `${import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080"}/v1/collections/${id}`,
+    {
+      method: "DELETE",  // ← POST から DELETE に変更
+      headers: {
+        Authorization: `Bearer ${JSON.parse(localStorage.getItem("hideme_auth") || "{}").token}`,
+      },
+    }
+  ).then((res) => {
+    if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
+    return res.json() as Promise<{ deleted: boolean }>;
+  });
+};
 export const uploadCollectionImage = async (file: File): Promise<string> => {
   const form = new FormData();
   form.append("file", file);

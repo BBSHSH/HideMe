@@ -1,8 +1,8 @@
 import { apiGet } from "./client";
-import type {FileListResponse } from "../data/files";
+import type { CollectionFile } from "../data/files";
 
 export const listFiles = () =>
-  apiGet<FileListResponse>("/v1/files");
+  apiGet<{ items: CollectionFile[] }>("/v1/files/all");
 
 export const uploadFile = (file: File) => {
   const form = new FormData();

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { C, F, glassPanel } from "../../theme/tokens";
 import { Icon } from "../../components/Icon";
+import CollectionGrid from "../../components/file/CollectionGrid"; // ← インポート
 
 // ─── ActionBtn ────────────────────────────────────────────────────────────────
 function ActionBtn({ icon, title, danger = false }: { icon: string; title: string; danger?: boolean }) {
@@ -25,6 +26,7 @@ function ActionBtn({ icon, title, danger = false }: { icon: string; title: strin
     >
       <Icon name={icon} />
     </button>
+
   );
 }
 
@@ -210,7 +212,7 @@ export default function VideoAssetsPage() {
         padding:    48,
         background: `radial-gradient(circle at top right, ${C.primary}0d 0%, transparent 60%)`,
       }}
-    >
+    >          
       {/* Breadcrumbs & Actions */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 16 }}>
         <div>
@@ -225,7 +227,32 @@ export default function VideoAssetsPage() {
             ))}
           </div>
           <h1 style={{ fontFamily: F.family, ...F.headlineLg, margin: 0 }}>VALORANT_ACE_S6_CHAMP.mp4</h1>
+          
         </div>
+          <div style={{ ...glassPanel, padding: 24, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 24 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, auto)", gap: "0 40px" }}>
+              <MetaCell label="File Size"   value="1.24 GB" />
+              <MetaCell label="Upload Date" value="Oct 12, 2023" />
+              <MetaCell label="Genre">
+                <span style={{ padding: "2px 8px", borderRadius: 4, background: `${C.primary}1a`, border: `1px solid ${C.primary}33`, color: C.primary, fontFamily: F.family, ...F.labelSm }}>
+                  Tactical FPS
+                </span>
+              </MetaCell>
+              <MetaCell label="Status">
+                <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#4ade80" }}>
+                  <Icon name="verified" size={16} style={{ color: "#4ade80" }} />
+                  <span style={{ fontFamily: F.family, ...F.labelSm }}>Secured</span>
+                </div>
+              </MetaCell>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <ActionBtn icon="content_cut" title="Quick Edit" />
+              <ActionBtn icon="download"    title="Download" />
+              <ActionBtn icon="ios_share"   title="Share" />
+              <ActionBtn icon="delete"      title="Delete" danger />
+            </div>
+          </div>
+
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <button
             style={{
@@ -278,31 +305,6 @@ export default function VideoAssetsPage() {
             />
             <VideoOverlay />
           </div>
-
-          {/* Metadata */}
-          <div style={{ ...glassPanel, padding: 24, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 24 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, auto)", gap: "0 40px" }}>
-              <MetaCell label="File Size"   value="1.24 GB" />
-              <MetaCell label="Upload Date" value="Oct 12, 2023" />
-              <MetaCell label="Genre">
-                <span style={{ padding: "2px 8px", borderRadius: 4, background: `${C.primary}1a`, border: `1px solid ${C.primary}33`, color: C.primary, fontFamily: F.family, ...F.labelSm }}>
-                  Tactical FPS
-                </span>
-              </MetaCell>
-              <MetaCell label="Status">
-                <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#4ade80" }}>
-                  <Icon name="verified" size={16} style={{ color: "#4ade80" }} />
-                  <span style={{ fontFamily: F.family, ...F.labelSm }}>Secured</span>
-                </div>
-              </MetaCell>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <ActionBtn icon="content_cut" title="Quick Edit" />
-              <ActionBtn icon="download"    title="Download" />
-              <ActionBtn icon="ios_share"   title="Share" />
-              <ActionBtn icon="delete"      title="Delete" danger />
-            </div>
-          </div>
         </div>
 
         {/* Right */}
@@ -326,7 +328,10 @@ export default function VideoAssetsPage() {
               ))}
             </div>
           </div>
-        </div>
+        </div>    
+        
+        <CollectionGrid cardSize="small" showAddButton={false} />    
+
       </div>
     </div>
   );
