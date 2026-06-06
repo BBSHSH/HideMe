@@ -8,7 +8,7 @@ import { Icon } from "../Icon";
 import { getDownloadUrl } from "../../api/files";
 import { formatBytes, formatRelativeTime } from "../../utils/format";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
 const VIDEO_EXTS = [".mp4", ".webm", ".mov", ".mkv", ".avi", ".flv", ".wmv"];
 const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"];

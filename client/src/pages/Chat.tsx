@@ -14,7 +14,7 @@ import {
 } from "../api/chat";
 import { useWebRTC, type CallState } from "../hooks/useWebRTC";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
 // ─── helpers ────────────────────────────────────────────────
 function fmtTime(iso: string) {

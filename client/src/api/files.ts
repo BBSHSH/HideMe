@@ -1,7 +1,7 @@
 import { apiGet } from "./client";
 import type { CollectionFile } from "../data/files";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
 function getToken(): string | null {
   const raw = localStorage.getItem("hideme_auth");

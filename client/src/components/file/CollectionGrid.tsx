@@ -9,7 +9,7 @@ import CollectionCard from "./CollectionCard";
 import AddCollectionCard from "./AddCollectionCard";
 import { formatBytes } from "../../utils/format";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
 function getToken() {
   return JSON.parse(localStorage.getItem("hideme_auth") || "{}").token ?? "";

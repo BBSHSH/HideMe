@@ -1,7 +1,7 @@
 import { apiGet, apiPost } from "./client";
 import type { Collection } from "../data/files";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
 
 export type CreateCollectionInput = {
@@ -41,7 +41,7 @@ export const createCollection = (input: CreateCollectionInput) =>
 
 export const updateCollection = (id: string, input: CreateCollectionInput) => {
   return fetch(
-    `${import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080"}/v1/collections/${id}`,
+    `${import.meta.env.VITE_API_BASE_URL ?? ""}/v1/collections/${id}`,
     {
       method: "PUT",  // ← POST から PUT に変更
       headers: {
@@ -57,7 +57,7 @@ export const updateCollection = (id: string, input: CreateCollectionInput) => {
 };
 export const deleteCollection = (id: string) => {
   return fetch(
-    `${import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080"}/v1/collections/${id}`,
+    `${import.meta.env.VITE_API_BASE_URL ?? ""}/v1/collections/${id}`,
     {
       method: "DELETE",  // ← POST から DELETE に変更
       headers: {
@@ -71,7 +71,7 @@ export const deleteCollection = (id: string) => {
 };
 export const deleteCollectionFile = (collectionId: string, fileId: string): Promise<{ deleted: boolean }> => {
   return fetch(
-    `${import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080"}/v1/collections/${collectionId}/files/${fileId}`,
+    `${import.meta.env.VITE_API_BASE_URL ?? ""}/v1/collections/${collectionId}/files/${fileId}`,
     {
       method: "DELETE",
       headers: {
@@ -90,7 +90,7 @@ export const uploadCollectionImage = async (file: File): Promise<string> => {
   form.append("folder", "icons");  // icons/ サブフォルダに保存
 
   const response = await fetch(
-    `${import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080"}/v1/files/upload`,
+    `${import.meta.env.VITE_API_BASE_URL ?? ""}/v1/files/upload`,
     {
       method: "POST",
       headers: {
@@ -104,5 +104,5 @@ export const uploadCollectionImage = async (file: File): Promise<string> => {
   const data = await response.json();
 
   // file_name を使う（既に "icons/uuid.ext" 形式）
-  return `${import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080"}/v1/files/${encodeURIComponent(data.file_name)}`;
+  return `${import.meta.env.VITE_API_BASE_URL ?? ""}/v1/files/${encodeURIComponent(data.file_name)}`;
 };

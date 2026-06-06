@@ -317,7 +317,7 @@ export default function VideoAssetsPage() {
             // backdropFilter は動画コンテナに使うと GPU レイヤー競合で映像が出なくなるため使わない
           }}>
             <video
-              src={`${import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080"}/v1/files/${encodeURIComponent(currentFile.file_name)}`}
+              src={`${import.meta.env.VITE_API_BASE_URL ?? ""}/v1/files/${encodeURIComponent(currentFile.file_name)}`}
               controls
               style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
             />

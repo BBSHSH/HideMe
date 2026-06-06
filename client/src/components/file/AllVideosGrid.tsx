@@ -10,7 +10,7 @@ import { formatBytes, formatRelativeTime } from "../../utils/format";
 import { useAuth } from "../../context/AuthContext";
 import { deleteCollectionFile } from "../../api/collections";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 const VIDEO_EXTS = [".mp4", ".webm", ".mov", ".mkv", ".avi", ".flv", ".wmv"];
 
 interface RecentFile {
