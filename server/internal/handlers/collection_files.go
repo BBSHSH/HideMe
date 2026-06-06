@@ -325,13 +325,12 @@ func UploadToCollection(store storage.Storage, database *sql.DB, storageType str
 		}
 
 		// サムネイル — thumbnails/ フォルダに保存（統計から除外される）
-		thumbnailName := ""
 		if thumb, err := c.FormFile("thumbnail"); err == nil {
 			if src, err := thumb.Open(); err == nil {
 				defer src.Close()
 				thumbStorePath := "thumbnails/" + filepath.Base(thumb.Filename)
 				if _, err := store.Upload(c.Request.Context(), thumbStorePath, src, thumb.Size); err == nil {
-					thumbnailName = thumbStorePath // パスをそのまま保存
+					_ = thumbStorePath // バックグラウンド処理では使用しない
 				} else {
 					log.Printf("[UPLOAD] thumbnail upload failed: %v", err)
 				}
@@ -362,84 +361,13 @@ func UploadToCollection(store storage.Storage, database *sql.DB, storageType str
 		}
 		dst.Close()
 
-		// ffmpeg で AV1 エンコード
-		tmpOut := filepath.Join(tmpDir, "hideme_out_"+uploadID+".mp4")
-		defer os.Remove(tmpOut)
+		// 即座に202を返してバックグラウンドでエンコード
+		c.JSON(http.StatusAccepted, gin.H{"status": "processing", "upload_id": uploadID})
 
-		totalSec, _ := getVideoDuration(tmpIn)
-		if trimEnd > 0.01 && trimEnd > trimStart {
-			totalSec = trimEnd - trimStart
-		}
-
-		height := resolutionHeight(resolution)
-		ffArgs := buildFFmpegArgs(tmpIn, tmpOut, trimStart, trimEnd, volumeVal, height, fpsVal)
-		log.Printf("[FFMPEG] start: %s -> AV1 %s crf=%d", file.Filename, resolution, crfForHeight(height))
-
-		if err := runFFmpeg(ffArgs, totalSec, func(pct float64) {
-			if uploadID != "" {
-				progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseFFmpeg, Percent: pct})
-			}
-		}); err != nil {
-			log.Printf("[FFMPEG] error: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "encoding_failed", "detail": err.Error()})
-			if uploadID != "" {
-				progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseError, Message: "encoding_failed"})
-			}
-			return
-		}
-
-		if uploadID != "" {
-			progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseFFmpeg, Percent: 100})
-		}
-
-		outFile, err := os.Open(tmpOut)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_open_output"})
-			return
-		}
-		defer outFile.Close()
-
-		outInfo, _ := outFile.Stat()
-		outFileName := strings.TrimSuffix(file.Filename, filepath.Ext(file.Filename)) + ".mp4"
-
-		item, err := store.UploadWithProgress(
-			c.Request.Context(),
-			outFileName,
-			outFile,
-			outInfo.Size(),
-			func(loaded, total int64) {
-				if uploadID != "" && total > 0 {
-					progress.Global.Send(uploadID, progress.Event{
-						Phase:   progress.PhaseNAS,
-						Percent: math.Min(float64(loaded)/float64(total)*100, 99),
-					})
-				}
-			},
-		)
-		if err != nil {
-			if errors.Is(err, storage.ErrFileTooLarge) {
-				c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "file_too_large"})
-			} else {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_save_file"})
-			}
-			if uploadID != "" {
-				progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseError, Message: "nas_failed"})
-			}
-			return
-		}
-
-		cf, err := db.AddFileToCollection(database, collectionID, item.Name, thumbnailName, storageType, item.Size, userID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_record_file"})
-			return
-		}
-
-		if uploadID != "" {
-			progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseDone, FileID: cf.ID})
-		}
-
-		log.Printf("[UPLOAD] done: id=%s size=%dMB->%dMB", cf.ID, file.Size/1024/1024, outInfo.Size()/1024/1024)
-		c.JSON(http.StatusOK, cf)
+		go func() {
+			defer os.Remove(tmpIn)
+			processVideoBackground(store, database, storageType, uploadID, collectionID, userID, file.Filename, tmpIn, trimStart, trimEnd, volumeVal, resolution, fpsVal)
+		}()
 	}
 }
 
