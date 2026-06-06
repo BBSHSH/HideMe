@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { C, F } from "../theme/tokens";
 import { Icon } from "../components/Icon";
 import { useSettings } from "../context/SettingsContext";
-import { uploadFileInChunks } from "../api/chunkUpload";
+import { uploadFileViaWebSocket } from "../api/wsUpload";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -260,8 +260,8 @@ export default function Editor() {
       // サムネイル生成（チャンクアップロード前に取得）
       void extractThumbnail(); // TODO: チャンクアップロード後にサムネイルを別送信
 
-      // チャンクアップロード（5MB単位に分割してCloudflareの100MB制限を回避）
-      const mergeRes = await uploadFileInChunks({
+      // WebSocket アップロード（Cloudflare経由でも高速）
+      await uploadFileViaWebSocket({
         file: renamedFile,
         collectionId,
         uploadId,
@@ -275,15 +275,9 @@ export default function Editor() {
         },
       });
 
-      // 202 Accepted = バックグラウンドで処理開始、200 OK = 同期処理完了
-      if (!mergeRes.ok && mergeRes.status !== 202) {
-        const b = await mergeRes.json().catch(() => ({}));
-        throw new Error((b as { detail?: string; error?: string }).detail ?? (b as { error?: string }).error ?? `HTTP ${mergeRes.status}`);
-      }
-
       setUploadProgress((p) => ({ ...p, sendPercent: 100 }));
 
-      // チャンク結合・エンコード中はポーリングで進捗を監視
+      // エンコード・NAS転送中はポーリングで進捗を監視
       startPolling();
 
     } catch (err) {

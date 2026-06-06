@@ -130,6 +130,8 @@ func main() {
 	api.GET("/upload-progress/:uploadId", handlers.SSEUploadProgress())
 	// ポーリング: アップロード進捗（Cloudflare経由でSSEが切れる場合）
 	api.GET("/upload-status/:uploadId", handlers.PollUploadProgress())
+	// WebSocket アップロード（Cloudflare経由でも高速）
+	api.GET("/ws-upload", handlers.WSUpload(store, database, cfg.Storage.Type))
 
 	// users (DM 相手選択用)
 	api.GET("/users", middleware.RequireAuth(), handlers.ListUsers(database))
