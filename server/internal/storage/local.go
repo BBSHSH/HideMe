@@ -6,21 +6,19 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-
-	"github.com/BBSHSH/HideMe/server/internal/config"
 )
 
 // LocalStorage はサーバー本体のファイルシステムに保存するストレージ実装
 type LocalStorage struct {
-	cfg config.LocalConfig
+	baseDir string
 }
 
-func NewLocalStorage(cfg config.LocalConfig) *LocalStorage {
-	return &LocalStorage{cfg: cfg}
+func NewLocalStorage(baseDir string) *LocalStorage {
+	return &LocalStorage{baseDir: baseDir}
 }
 
 func (s *LocalStorage) uploadDir() string {
-	return filepath.Clean(s.cfg.UploadDir)
+	return filepath.Clean(s.baseDir)
 }
 
 func (s *LocalStorage) ensureDir() error {
@@ -70,10 +68,6 @@ func (s *LocalStorage) Upload(ctx context.Context, name string, data io.Reader, 
 }
 
 func (s *LocalStorage) UploadWithProgress(_ context.Context, name string, data io.Reader, size int64, onProgress ProgressFunc) (FileItem, error) {
-	if s.cfg.MaxFileSize > 0 && size > s.cfg.MaxFileSize {
-		return FileItem{}, ErrFileTooLarge
-	}
-
 	if err := s.ensureDir(); err != nil {
 		return FileItem{}, err
 	}

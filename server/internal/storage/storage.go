@@ -38,3 +38,20 @@ type Storage interface {
 	Open(ctx context.Context, name string) (io.ReadCloser, FileItem, error)
 	Delete(ctx context.Context, name string) error
 }
+
+// progressReader は読み込み進捗を報告する
+type progressReader struct {
+	r          io.Reader
+	total      int64
+	loaded     int64
+	onProgress ProgressFunc
+}
+
+func (pr *progressReader) Read(p []byte) (int, error) {
+	n, err := pr.r.Read(p)
+	if n > 0 {
+		pr.loaded += int64(n)
+		pr.onProgress(pr.loaded, pr.total)
+	}
+	return n, err
+}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -21,54 +22,56 @@ func main() {
 		log.Println("No .env file found, using environment variables")
 	}
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-
-	configPath := os.Getenv("NAS_CONFIG")
-	if configPath == "" {
-		configPath = "./config/nas.yaml"
-	}
-
-	cfg, err := config.Load(configPath)
-	if err != nil {
+	// YAML 設定を読み込む（環境変数で上書き可能）
+	configPath := "./config.yaml"
+	if err := config.Load(configPath); err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
-	discordCfg := config.LoadDiscord()
+	// config.Global から設定を取得
+	cfg := config.Global
+	log.Printf("config: port=%d, public_url=%s", cfg.Server.Port, cfg.Public.URL)
 
-	dbPath := os.Getenv("DB_PATH")
-	if dbPath == "" {
-		dbPath = "./hideme.db"
-	}
-
+	dbPath := cfg.Database.Path
 	database, err := db.Open(dbPath)
 	if err != nil {
 		log.Fatalf("failed to open db: %v", err)
 	}
 	defer database.Close()
 
-	// 両ストレージを常に生成し、設定された方をプライマリに
-	nasStore   := storage.NewSFTPStorage(cfg.NAS)
-	localStore := storage.NewLocalStorage(cfg.Local)
-
+	// ストレージ初期化
 	var store storage.Storage
-	switch cfg.StorageType {
-	case config.StorageLocal:
-		store = localStore
-		log.Printf("storage: local  dir=%s", cfg.Local.UploadDir)
+	switch cfg.Storage.Type {
+	case "local":
+		store = storage.NewLocalStorage(cfg.Storage.Local.BaseDir)
+		log.Printf("storage: local  dir=%s", cfg.Storage.Local.BaseDir)
+	case "nas":
+		// NAS (SMB) の設定
+		store = storage.NewNASStorage(storage.NASConfig{
+			Host:     cfg.Storage.NAS.Host,
+			User:     cfg.Storage.NAS.User,
+			Password: cfg.Storage.NAS.Password,
+			Share:    cfg.Storage.NAS.Share,
+			Port:     cfg.Storage.NAS.Port,
+		})
+		log.Printf("storage: nas  host=%s  share=%s", cfg.Storage.NAS.Host, cfg.Storage.NAS.Share)
 	default:
-		store = nasStore
-		log.Printf("storage: nas  host=%s  dir=%s", cfg.NAS.Host, cfg.NAS.UploadDir)
+		log.Fatalf("unknown storage type: %s", cfg.Storage.Type)
 	}
 
-	// ストレージセレクター: ファイルに記録された storage_type で正しいストアを返す
+	// ストレージセレクター
 	storeFor := func(storageType string) storage.Storage {
 		if storageType == "local" {
-			return localStore
+			return storage.NewLocalStorage(cfg.Storage.Local.BaseDir)
 		}
-		return nasStore
+		// NAS（デフォルト）
+		return storage.NewNASStorage(storage.NASConfig{
+			Host:     cfg.Storage.NAS.Host,
+			User:     cfg.Storage.NAS.User,
+			Password: cfg.Storage.NAS.Password,
+			Share:    cfg.Storage.NAS.Share,
+			Port:     cfg.Storage.NAS.Port,
+		})
 	}
 
 	router := gin.New()
@@ -100,8 +103,8 @@ func main() {
 	api.PUT("/auth/settings", middleware.RequireAuth(), middleware.RequireAdmin(), handlers.UpdateAuthSettings(database))
 
 	// Discord OAuth2
-	api.GET("/auth/discord", handlers.DiscordOAuthRedirect(discordCfg))
-	api.GET("/auth/discord/callback", handlers.DiscordOAuthCallback(discordCfg, database))
+	api.GET("/auth/discord", handlers.DiscordOAuthRedirect(cfg))
+	api.GET("/auth/discord/callback", handlers.DiscordOAuthCallback(cfg, database))
 
 	// files（ワイルドカード *name は最後に登録 — 全パスをキャッチするため）
 	api.GET("/files", handlers.ListFiles(store))
@@ -117,7 +120,7 @@ func main() {
 	api.DELETE("/collections/:id", middleware.RequireAuth(), middleware.RequireAdmin(), handlers.DeleteCollection(database, store))
 	// collection files
 	api.GET("/collections/:id/files", handlers.ListCollectionFiles(database))
-	api.POST("/collections/:id/files", middleware.RequireAuth(), handlers.UploadToCollection(store, database, string(cfg.StorageType)))
+	api.POST("/collections/:id/files", middleware.RequireAuth(), handlers.UploadToCollection(store, database, cfg.Storage.Type))
 	api.DELETE("/collections/:id/files/:fileID", middleware.RequireAuth(), handlers.DeleteCollectionFile(database, storeFor))
 
 	// SSE: アップロード進捗
@@ -143,6 +146,7 @@ func main() {
 	api.POST("/chat/channels/:id/voice/join", middleware.RequireAuth(), handlers.VoiceJoin())
 	api.POST("/chat/channels/:id/voice/leave", middleware.RequireAuth(), handlers.VoiceLeave())
 
+	port := fmt.Sprintf("%d", cfg.Server.Port)
 	server := &http.Server{
 		Addr:              ":" + port,
 		Handler:           router,

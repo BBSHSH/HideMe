@@ -12,6 +12,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -61,7 +62,7 @@ func consumeState(state string) bool {
 }
 
 // DiscordOAuthRedirect は Discord の認証画面にリダイレクトする
-func DiscordOAuthRedirect(cfg config.DiscordConfig) gin.HandlerFunc {
+func DiscordOAuthRedirect(cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		state, err := generateState()
 		if err != nil {
@@ -70,9 +71,10 @@ func DiscordOAuthRedirect(cfg config.DiscordConfig) gin.HandlerFunc {
 		}
 		saveState(state)
 
+		redirectURI := cfg.Public.URL + "/v1/auth/discord/callback"
 		params := url.Values{}
-		params.Set("client_id", cfg.ClientID)
-		params.Set("redirect_uri", cfg.RedirectURI)
+		params.Set("client_id", cfg.Discord.ClientID)
+		params.Set("redirect_uri", redirectURI)
 		params.Set("response_type", "code")
 		// guilds.members.read は Guild のメンバー情報（ロール含む）を取得するのに必要
 		params.Set("scope", "identify guilds.members.read")
@@ -84,11 +86,11 @@ func DiscordOAuthRedirect(cfg config.DiscordConfig) gin.HandlerFunc {
 }
 
 // DiscordOAuthCallback は Discord からのコールバックを処理する
-func DiscordOAuthCallback(cfg config.DiscordConfig, database *sql.DB) gin.HandlerFunc {
+func DiscordOAuthCallback(cfg *config.Config, database *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		errParam := c.Query("error")
 		if errParam != "" {
-			redirectWithError(c, cfg.FrontendURL, "discord_denied")
+			redirectWithError(c, cfg.Public.URL, "discord_denied")
 			return
 		}
 
@@ -96,20 +98,20 @@ func DiscordOAuthCallback(cfg config.DiscordConfig, database *sql.DB) gin.Handle
 		state := c.Query("state")
 
 		if code == "" || state == "" {
-			redirectWithError(c, cfg.FrontendURL, "invalid_callback")
+			redirectWithError(c, cfg.Public.URL, "invalid_callback")
 			return
 		}
 
 		if !consumeState(state) {
-			redirectWithError(c, cfg.FrontendURL, "invalid_state")
+			redirectWithError(c, cfg.Public.URL, "invalid_state")
 			return
 		}
 
 		// 1. code → access token 交換
-		tokenResp, err := exchangeCode(cfg, code)
+		tokenResp, err := exchangeCodeWithConfig(cfg, code)
 		if err != nil {
 			log.Printf("[DISCORD] exchangeCode error: %v", err)
-			redirectWithError(c, cfg.FrontendURL, "token_exchange_failed")
+			redirectWithError(c, cfg.Public.URL, "token_exchange_failed")
 			return
 		}
 
@@ -117,33 +119,33 @@ func DiscordOAuthCallback(cfg config.DiscordConfig, database *sql.DB) gin.Handle
 		discordUser, err := fetchDiscordUser(tokenResp.AccessToken)
 		if err != nil {
 			log.Printf("[DISCORD] fetchDiscordUser error: %v", err)
-			redirectWithError(c, cfg.FrontendURL, "user_fetch_failed")
+			redirectWithError(c, cfg.Public.URL, "user_fetch_failed")
 			return
 		}
 		log.Printf("[DISCORD] User: %s (%s)", discordUser.Username, discordUser.ID)
 
 		// 3. Guild メンバー確認 + ロール確認
 		// GuildID が設定されている場合はサーバー参加を必須とする
-		if cfg.GuildID != "" {
-			member, err := checkGuildMember(cfg, discordUser.ID, tokenResp.AccessToken)
+		if cfg.Discord.GuildID != "" {
+			member, err := checkGuildMemberWithConfig(cfg, discordUser.ID, tokenResp.AccessToken)
 			if err != nil {
 				log.Printf("[DISCORD] checkGuildMember error for user %s: %v", discordUser.ID, err)
-				redirectWithError(c, cfg.FrontendURL, "not_guild_member")
+				redirectWithError(c, cfg.Public.URL, "not_guild_member")
 				return
 			}
 
-			// RequiredRoleID が設定されている場合はロール保持を必須とする
-			if cfg.RequiredRoleID != "" {
+			// RequiredRole が設定されている場合はロール保持を必須とする
+			if cfg.Discord.RequiredRole != "" {
 				hasRole := false
 				for _, r := range member.Roles {
-					if r == cfg.RequiredRoleID {
+					if r == cfg.Discord.RequiredRole {
 						hasRole = true
 						break
 					}
 				}
 				if !hasRole {
-					log.Printf("[DISCORD] User %s (%s) is missing required role %s", discordUser.Username, discordUser.ID, cfg.RequiredRoleID)
-					redirectWithError(c, cfg.FrontendURL, "missing_required_role")
+					log.Printf("[DISCORD] User %s (%s) is missing required role %s", discordUser.Username, discordUser.ID, cfg.Discord.RequiredRole)
+					redirectWithError(c, cfg.Public.URL, "missing_required_role")
 					return
 				}
 				log.Printf("[DISCORD] User %s passed role check", discordUser.Username)
@@ -162,7 +164,7 @@ func DiscordOAuthCallback(cfg config.DiscordConfig, database *sql.DB) gin.Handle
 		)
 		if err != nil {
 			log.Printf("[DISCORD] GetOrCreateDiscordUser error: %v", err)
-			redirectWithError(c, cfg.FrontendURL, "db_error")
+			redirectWithError(c, cfg.Public.URL, "db_error")
 			return
 		}
 
@@ -170,7 +172,7 @@ func DiscordOAuthCallback(cfg config.DiscordConfig, database *sql.DB) gin.Handle
 		jwtToken, err := auth.GenerateDiscordToken(dbUser.ID, dbUser.Username, dbUser.Role, dbUser.DiscordID, avatarURL)
 		if err != nil {
 			log.Printf("[DISCORD] GenerateDiscordToken error: %v", err)
-			redirectWithError(c, cfg.FrontendURL, "token_generation_failed")
+			redirectWithError(c, cfg.Public.URL, "token_generation_failed")
 			return
 		}
 
@@ -182,7 +184,7 @@ func DiscordOAuthCallback(cfg config.DiscordConfig, database *sql.DB) gin.Handle
 		params.Set("role", dbUser.Role)
 		params.Set("avatar", avatarURL)
 		params.Set("auth_method", "discord")
-		c.Redirect(http.StatusFound, cfg.FrontendURL+"/auth/discord/callback?"+params.Encode())
+		c.Redirect(http.StatusFound, cfg.Public.URL+"/auth/discord/callback?"+params.Encode())
 	}
 }
 
@@ -248,13 +250,14 @@ type discordGuildMember struct {
 	Roles []string `json:"roles"`
 }
 
-func exchangeCode(cfg config.DiscordConfig, code string) (*discordTokenResponse, error) {
+func exchangeCodeWithConfig(cfg *config.Config, code string) (*discordTokenResponse, error) {
+	redirectURI := cfg.Public.URL + "/v1/auth/discord/callback"
 	data := url.Values{}
-	data.Set("client_id", cfg.ClientID)
-	data.Set("client_secret", cfg.ClientSecret)
+	data.Set("client_id", cfg.Discord.ClientID)
+	data.Set("client_secret", cfg.Discord.ClientSecret)
 	data.Set("grant_type", "authorization_code")
 	data.Set("code", code)
-	data.Set("redirect_uri", cfg.RedirectURI)
+	data.Set("redirect_uri", redirectURI)
 
 	req, err := http.NewRequestWithContext(
 		context.Background(),
@@ -317,14 +320,15 @@ func fetchDiscordUser(accessToken string) (*discordAPIUser, error) {
 	return &u, nil
 }
 
-// checkGuildMember はサーバー参加確認 + ロール一覧取得を行う。
+// checkGuildMemberWithConfig はサーバー参加確認 + ロール一覧取得を行う。
 // Bot トークンが設定されていれば Bot で確認（推奨）。
 // なければユーザーの access_token で確認（guilds.members.read scope が必要）。
-func checkGuildMember(cfg config.DiscordConfig, userID, userAccessToken string) (*discordGuildMember, error) {
-	if cfg.BotToken != "" {
-		return fetchGuildMemberWithBot(cfg.BotToken, cfg.GuildID, userID)
+func checkGuildMemberWithConfig(cfg *config.Config, userID, userAccessToken string) (*discordGuildMember, error) {
+	botToken := os.Getenv("DISCORD_BOT_TOKEN")
+	if botToken != "" {
+		return fetchGuildMemberWithBot(botToken, cfg.Discord.GuildID, userID)
 	}
-	return fetchGuildMemberWithUserToken(userAccessToken, cfg.GuildID, userID)
+	return fetchGuildMemberWithUserToken(userAccessToken, cfg.Discord.GuildID, userID)
 }
 
 // fetchGuildMemberWithBot は Bot トークンで /guilds/{guild}/members/{user} を叩く。
