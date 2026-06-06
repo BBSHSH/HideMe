@@ -1,7 +1,7 @@
 /tmp/
 /storage/
 .env
-*nas.yaml
+*.yaml
 /uploads/
 /tmp/
 *.exe
