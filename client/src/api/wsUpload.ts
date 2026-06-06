@@ -23,7 +23,11 @@ export function uploadFileViaWebSocket(opts: WSUploadOptions): Promise<void> {
 
     const token = getToken();
     const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
-    const wsURL = (BASE_URL.replace(/^http/, "ws") || `ws://${location.host}`) + `/v1/ws-upload?token=${token}`;
+    // https → wss、http → ws に変換
+    const wsBase = BASE_URL
+      ? BASE_URL.replace(/^https/, "wss").replace(/^http/, "ws")
+      : `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`;
+    const wsURL = wsBase + `/v1/ws-upload?token=${token}`;
 
     const ws = new WebSocket(wsURL);
     ws.binaryType = "arraybuffer";
