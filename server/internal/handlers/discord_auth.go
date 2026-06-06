@@ -90,7 +90,7 @@ func DiscordOAuthCallback(cfg *config.Config, database *sql.DB) gin.HandlerFunc 
 	return func(c *gin.Context) {
 		errParam := c.Query("error")
 		if errParam != "" {
-			redirectWithError(c, cfg.Public.URL, "discord_denied")
+			redirectWithError(c, cfg.Public.FrontendURL, "discord_denied")
 			return
 		}
 
@@ -98,12 +98,12 @@ func DiscordOAuthCallback(cfg *config.Config, database *sql.DB) gin.HandlerFunc 
 		state := c.Query("state")
 
 		if code == "" || state == "" {
-			redirectWithError(c, cfg.Public.URL, "invalid_callback")
+			redirectWithError(c, cfg.Public.FrontendURL, "invalid_callback")
 			return
 		}
 
 		if !consumeState(state) {
-			redirectWithError(c, cfg.Public.URL, "invalid_state")
+			redirectWithError(c, cfg.Public.FrontendURL, "invalid_state")
 			return
 		}
 
@@ -111,7 +111,7 @@ func DiscordOAuthCallback(cfg *config.Config, database *sql.DB) gin.HandlerFunc 
 		tokenResp, err := exchangeCodeWithConfig(cfg, code)
 		if err != nil {
 			log.Printf("[DISCORD] exchangeCode error: %v", err)
-			redirectWithError(c, cfg.Public.URL, "token_exchange_failed")
+			redirectWithError(c, cfg.Public.FrontendURL, "token_exchange_failed")
 			return
 		}
 
@@ -119,7 +119,7 @@ func DiscordOAuthCallback(cfg *config.Config, database *sql.DB) gin.HandlerFunc 
 		discordUser, err := fetchDiscordUser(tokenResp.AccessToken)
 		if err != nil {
 			log.Printf("[DISCORD] fetchDiscordUser error: %v", err)
-			redirectWithError(c, cfg.Public.URL, "user_fetch_failed")
+			redirectWithError(c, cfg.Public.FrontendURL, "user_fetch_failed")
 			return
 		}
 		log.Printf("[DISCORD] User: %s (%s)", discordUser.Username, discordUser.ID)
@@ -130,7 +130,7 @@ func DiscordOAuthCallback(cfg *config.Config, database *sql.DB) gin.HandlerFunc 
 			member, err := checkGuildMemberWithConfig(cfg, discordUser.ID, tokenResp.AccessToken)
 			if err != nil {
 				log.Printf("[DISCORD] checkGuildMember error for user %s: %v", discordUser.ID, err)
-				redirectWithError(c, cfg.Public.URL, "not_guild_member")
+				redirectWithError(c, cfg.Public.FrontendURL, "not_guild_member")
 				return
 			}
 
@@ -145,7 +145,7 @@ func DiscordOAuthCallback(cfg *config.Config, database *sql.DB) gin.HandlerFunc 
 				}
 				if !hasRole {
 					log.Printf("[DISCORD] User %s (%s) is missing required role %s", discordUser.Username, discordUser.ID, cfg.Discord.RequiredRole)
-					redirectWithError(c, cfg.Public.URL, "missing_required_role")
+					redirectWithError(c, cfg.Public.FrontendURL, "missing_required_role")
 					return
 				}
 				log.Printf("[DISCORD] User %s passed role check", discordUser.Username)
@@ -164,7 +164,7 @@ func DiscordOAuthCallback(cfg *config.Config, database *sql.DB) gin.HandlerFunc 
 		)
 		if err != nil {
 			log.Printf("[DISCORD] GetOrCreateDiscordUser error: %v", err)
-			redirectWithError(c, cfg.Public.URL, "db_error")
+			redirectWithError(c, cfg.Public.FrontendURL, "db_error")
 			return
 		}
 
@@ -172,7 +172,7 @@ func DiscordOAuthCallback(cfg *config.Config, database *sql.DB) gin.HandlerFunc 
 		jwtToken, err := auth.GenerateDiscordToken(dbUser.ID, dbUser.Username, dbUser.Role, dbUser.DiscordID, avatarURL)
 		if err != nil {
 			log.Printf("[DISCORD] GenerateDiscordToken error: %v", err)
-			redirectWithError(c, cfg.Public.URL, "token_generation_failed")
+			redirectWithError(c, cfg.Public.FrontendURL, "token_generation_failed")
 			return
 		}
 
@@ -184,7 +184,7 @@ func DiscordOAuthCallback(cfg *config.Config, database *sql.DB) gin.HandlerFunc 
 		params.Set("role", dbUser.Role)
 		params.Set("avatar", avatarURL)
 		params.Set("auth_method", "discord")
-		c.Redirect(http.StatusFound, cfg.Public.URL+"/auth/discord/callback?"+params.Encode())
+		c.Redirect(http.StatusFound, cfg.Public.FrontendURL+"/auth/discord/callback?"+params.Encode())
 	}
 }
 
@@ -252,9 +252,18 @@ type discordGuildMember struct {
 
 func exchangeCodeWithConfig(cfg *config.Config, code string) (*discordTokenResponse, error) {
 	redirectURI := cfg.Public.URL + "/v1/auth/discord/callback"
+
+	// デバッグ: 実際に送信される値を確認（先頭4文字・末尾4文字で cURL と照合）
+	sec := cfg.Discord.ClientSecret
+	secPreview := ""
+	if len(sec) >= 8 {
+		secPreview = sec[:4] + "..." + sec[len(sec)-4:]
+	}
+	log.Printf("[DISCORD] exchange: client_id=%q secret_len=%d secret=%s redirect_uri=%q",
+		cfg.Discord.ClientID, len(sec), secPreview, redirectURI)
+
+	// Discord 推奨: 認証情報は HTTP Basic 認証ヘッダで送る
 	data := url.Values{}
-	data.Set("client_id", cfg.Discord.ClientID)
-	data.Set("client_secret", cfg.Discord.ClientSecret)
 	data.Set("grant_type", "authorization_code")
 	data.Set("code", code)
 	data.Set("redirect_uri", redirectURI)
@@ -269,6 +278,7 @@ func exchangeCodeWithConfig(cfg *config.Config, code string) (*discordTokenRespo
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth(cfg.Discord.ClientID, cfg.Discord.ClientSecret)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

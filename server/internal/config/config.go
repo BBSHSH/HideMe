@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log"
 	"os"
 
 	"gopkg.in/yaml.v2"
@@ -13,7 +14,8 @@ type Config struct {
 	} `yaml:"server"`
 
 	Public struct {
-		URL string `yaml:"url"`
+		URL         string `yaml:"url"`          // API のベース URL（Discord OAuth redirect_uri に使用）
+		FrontendURL string `yaml:"frontend_url"` // フロントエンドの URL（空なら URL と同じ。開発時は http://localhost:5173）
 	} `yaml:"public"`
 
 	Database struct {
@@ -77,7 +79,8 @@ func Load(path string) error {
 			} `yaml:"nas"`
 		}{Type: "local"},
 		Public: struct {
-			URL string `yaml:"url"`
+			URL         string `yaml:"url"`
+			FrontendURL string `yaml:"frontend_url"`
 		}{URL: "http://localhost:8080"},
 		FFmpeg: struct {
 			Path string `yaml:"path"`
@@ -89,15 +92,43 @@ func Load(path string) error {
 	}
 
 	// config.yaml が存在する場合は読み込む
+	loaded := false
 	if data, err := os.ReadFile(path); err == nil {
 		if err := yaml.Unmarshal(data, Global); err != nil {
 			return err
 		}
+		loaded = true
+	}
+	if loaded {
+		log.Printf("[CONFIG] loaded from %s", path)
+	} else {
+		log.Printf("[CONFIG] %s not found, using defaults + env vars", path)
+	}
+
+	// 空の場合のデフォルト補完
+	if Global.Storage.Type == "" {
+		Global.Storage.Type = "local"
+	}
+	if Global.Storage.Local.BaseDir == "" {
+		Global.Storage.Local.BaseDir = "./uploads"
+	}
+	if Global.Database.Path == "" {
+		Global.Database.Path = "./hideme.db"
+	}
+	if Global.Server.Port == 0 {
+		Global.Server.Port = 8080
+	}
+	// FrontendURL が未設定なら API の URL を使う（本番は同一オリジン）
+	if Global.Public.FrontendURL == "" {
+		Global.Public.FrontendURL = Global.Public.URL
 	}
 
 	// 環境変数で上書き
 	if url := os.Getenv("PUBLIC_URL"); url != "" {
 		Global.Public.URL = url
+	}
+	if furl := os.Getenv("FRONTEND_URL"); furl != "" {
+		Global.Public.FrontendURL = furl
 	}
 	if clientID := os.Getenv("DISCORD_CLIENT_ID"); clientID != "" {
 		Global.Discord.ClientID = clientID

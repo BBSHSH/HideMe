@@ -2,80 +2,313 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net"
+	"os"
+	"path"
+	"time"
 
-	"github.com/hirochachacha/go-smb2"
+	"github.com/pkg/sftp"
+	"golang.org/x/crypto/ssh"
 )
 
-// NASConfig は SMB/CIFS ストレージの設定
+// NASConfig は SFTP (SSH) で接続する NAS ストレージの設定
 type NASConfig struct {
-	Host     string
-	User     string
-	Password string
-	Share    string
-	Port     int
+	Host           string
+	User           string
+	Password       string
+	Share          string // アップロード先ディレクトリ（例: HideMe/uploads）
+	Port           int    // SFTP は通常 22
+	PrivateKeyPath string
+	TempDir        string
+	Timeout        int // 秒
+	MaxRetries     int
+	RetryDelay     int // 秒
+	ChunkSize      int // バイト
 }
 
-// NASStorage は NAS (SMB/CIFS) にファイルを保存するストレージ実装
+// NASStorage は NAS (SFTP/SSH) にファイルを保存するストレージ実装
 type NASStorage struct {
 	cfg NASConfig
 }
 
 func NewNASStorage(cfg NASConfig) *NASStorage {
+	// デフォルト補完
 	if cfg.Port == 0 {
-		cfg.Port = 445
+		cfg.Port = 22
+	}
+	if cfg.Timeout == 0 {
+		cfg.Timeout = 30
+	}
+	if cfg.MaxRetries == 0 {
+		cfg.MaxRetries = 3
+	}
+	if cfg.RetryDelay == 0 {
+		cfg.RetryDelay = 5
+	}
+	if cfg.ChunkSize == 0 {
+		cfg.ChunkSize = 1048576 // 1 MB
+	}
+	if cfg.Share == "" {
+		cfg.Share = "HideMe/uploads"
 	}
 	return &NASStorage{cfg: cfg}
 }
 
-func (s *NASStorage) connect(ctx context.Context) (*smb2.Session, *smb2.Share, error) {
-	// TODO: 実装（go-smb2 API を確認してから）
-	return nil, nil, fmt.Errorf("NAS/SMB storage not yet fully implemented")
+func (s *NASStorage) Delete(ctx context.Context, name string) error {
+	client, sshClient, err := s.connect(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = client.Close()
+		_ = sshClient.Close()
+	}()
+
+	target := s.uploadPath(name)
+	if err := client.Remove(target); err != nil {
+		if os.IsNotExist(err) {
+			return ErrNotFound
+		}
+		return err
+	}
+	return nil
 }
 
-// Upload はファイルをアップロード
+func (s *NASStorage) List(ctx context.Context) ([]FileItem, error) {
+	client, sshClient, err := s.connect(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = client.Close()
+		_ = sshClient.Close()
+	}()
+
+	if err := s.ensureDirs(client); err != nil {
+		return nil, err
+	}
+
+	entries, err := client.ReadDir(s.cfg.Share)
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]FileItem, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		items = append(items, FileItem{
+			Name:     entry.Name(),
+			Size:     entry.Size(),
+			Modified: entry.ModTime().UTC(),
+		})
+	}
+	return items, nil
+}
+
 func (s *NASStorage) Upload(ctx context.Context, name string, data io.Reader, size int64) (FileItem, error) {
 	return s.UploadWithProgress(ctx, name, data, size, nil)
 }
 
-// UploadWithProgress は進捗付きアップロード
 func (s *NASStorage) UploadWithProgress(ctx context.Context, name string, data io.Reader, size int64, onProgress ProgressFunc) (FileItem, error) {
-	// TODO: 実装
-	return FileItem{}, fmt.Errorf("NAS/SMB storage not yet fully implemented")
+	client, sshClient, err := s.connect(ctx)
+	if err != nil {
+		return FileItem{}, err
+	}
+	defer func() {
+		_ = client.Close()
+		_ = sshClient.Close()
+	}()
+
+	if err := s.ensureDirs(client); err != nil {
+		return FileItem{}, err
+	}
+
+	target := s.uploadPath(name)
+	// サブフォルダ (thumbnails/ icons/) を作成
+	if dir := path.Dir(target); dir != s.cfg.Share {
+		if err := client.MkdirAll(dir); err != nil {
+			return FileItem{}, fmt.Errorf("mkdir %s: %w", dir, err)
+		}
+	}
+	writer, err := client.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
+	if err != nil {
+		return FileItem{}, err
+	}
+	defer writer.Close()
+
+	var reader io.Reader = data
+	if onProgress != nil && size > 0 {
+		reader = &progressReader{r: data, total: size, onProgress: onProgress}
+	}
+	buf := make([]byte, s.cfg.ChunkSize)
+	if _, err := io.CopyBuffer(writer, reader, buf); err != nil {
+		return FileItem{}, err
+	}
+
+	info, err := client.Stat(target)
+	if err != nil {
+		return FileItem{}, err
+	}
+
+	return FileItem{
+		Name:     info.Name(),
+		Size:     info.Size(),
+		Modified: info.ModTime().UTC(),
+	}, nil
 }
 
-// Download はファイルをダウンロード
-func (s *NASStorage) Download(ctx context.Context, name string) (io.ReadCloser, error) {
-	// TODO: 実装
-	return nil, fmt.Errorf("NAS/SMB storage not yet fully implemented")
-}
-
-// Open は Storage インターフェースの Open メソッド
 func (s *NASStorage) Open(ctx context.Context, name string) (io.ReadCloser, FileItem, error) {
-	// TODO: 実装
-	return nil, FileItem{}, fmt.Errorf("NAS/SMB storage not yet fully implemented")
+	client, sshClient, err := s.connect(ctx)
+	if err != nil {
+		return nil, FileItem{}, err
+	}
+
+	if err := s.ensureDirs(client); err != nil {
+		_ = client.Close()
+		_ = sshClient.Close()
+		return nil, FileItem{}, err
+	}
+
+	target := s.uploadPath(name)
+	file, err := client.Open(target)
+	if err != nil {
+		_ = client.Close()
+		_ = sshClient.Close()
+		if os.IsNotExist(err) {
+			return nil, FileItem{}, ErrNotFound
+		}
+		var statusErr *sftp.StatusError
+		if errors.As(err, &statusErr) && statusErr.Code == uint32(sftp.ErrSSHFxNoSuchFile) {
+			return nil, FileItem{}, ErrNotFound
+		}
+		return nil, FileItem{}, err
+	}
+
+	info, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		_ = client.Close()
+		_ = sshClient.Close()
+		return nil, FileItem{}, err
+	}
+
+	return &sftpReadCloser{
+			file:   file,
+			client: client,
+			ssh:    sshClient,
+		}, FileItem{
+			Name:     info.Name(),
+			Size:     info.Size(),
+			Modified: info.ModTime().UTC(),
+		}, nil
 }
 
-// Delete はファイルを削除
-func (s *NASStorage) Delete(ctx context.Context, name string) error {
-	// TODO: 実装
-	return fmt.Errorf("NAS/SMB storage not yet fully implemented")
+func (s *NASStorage) uploadPath(name string) string {
+	sub := CleanSubPath(name)
+	return path.Join(s.cfg.Share, sub)
 }
 
-// List はファイル一覧を取得
-func (s *NASStorage) List(ctx context.Context) ([]FileItem, error) {
-	// TODO: 実装
-	return nil, fmt.Errorf("NAS/SMB storage not yet fully implemented")
+func (s *NASStorage) ensureDirs(client *sftp.Client) error {
+	if err := client.MkdirAll(s.cfg.Share); err != nil {
+		return err
+	}
+	if s.cfg.TempDir != "" {
+		if err := client.MkdirAll(s.cfg.TempDir); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-// Exists はファイルが存在するかチェック
-func (s *NASStorage) Exists(ctx context.Context, name string) (bool, error) {
-	// TODO: 実装
-	return false, fmt.Errorf("NAS/SMB storage not yet fully implemented")
+func (s *NASStorage) connect(ctx context.Context) (*sftp.Client, *ssh.Client, error) {
+	var lastErr error
+	retries := s.cfg.MaxRetries
+	for attempt := 0; attempt <= retries; attempt++ {
+		client, sshClient, err := s.connectOnce(ctx)
+		if err == nil {
+			return client, sshClient, nil
+		}
+		lastErr = err
+
+		if attempt == retries {
+			break
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, nil, ctx.Err()
+		case <-time.After(time.Duration(s.cfg.RetryDelay) * time.Second):
+		}
+	}
+	return nil, nil, lastErr
 }
 
-// FilePath はファイルの絶対パスを返す（LocalStorage のみ実装）
-func (s *NASStorage) FilePath(name string) string {
-	return ""
+func (s *NASStorage) connectOnce(ctx context.Context) (*sftp.Client, *ssh.Client, error) {
+	auths := make([]ssh.AuthMethod, 0)
+	if s.cfg.PrivateKeyPath != "" {
+		keyBytes, err := os.ReadFile(s.cfg.PrivateKeyPath)
+		if err != nil {
+			return nil, nil, err
+		}
+		signer, err := ssh.ParsePrivateKey(keyBytes)
+		if err != nil {
+			return nil, nil, err
+		}
+		auths = append(auths, ssh.PublicKeys(signer))
+	}
+	if s.cfg.Password != "" {
+		auths = append(auths, ssh.Password(s.cfg.Password))
+	}
+	if len(auths) == 0 {
+		return nil, nil, errors.New("no auth method configured")
+	}
+
+	sshConfig := &ssh.ClientConfig{
+		User:            s.cfg.User,
+		Auth:            auths,
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO: production では known_hosts を使う
+		Timeout:         time.Duration(s.cfg.Timeout) * time.Second,
+	}
+
+	addr := fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
+	dialer := net.Dialer{Timeout: time.Duration(s.cfg.Timeout) * time.Second}
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	clientConn, chans, reqs, err := ssh.NewClientConn(conn, addr, sshConfig)
+	if err != nil {
+		_ = conn.Close()
+		return nil, nil, err
+	}
+	sshClient := ssh.NewClient(clientConn, chans, reqs)
+
+	sftpClient, err := sftp.NewClient(sshClient)
+	if err != nil {
+		_ = sshClient.Close()
+		return nil, nil, err
+	}
+	return sftpClient, sshClient, nil
+}
+
+type sftpReadCloser struct {
+	file   *sftp.File
+	client *sftp.Client
+	ssh    *ssh.Client
+}
+
+func (s *sftpReadCloser) Read(p []byte) (int, error) {
+	return s.file.Read(p)
+}
+
+func (s *sftpReadCloser) Close() error {
+	_ = s.file.Close()
+	_ = s.client.Close()
+	return s.ssh.Close()
 }
