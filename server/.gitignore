@@ -6,3 +6,7 @@
 /tmp/
 *.exe
 /ffmpeg/ffmpeg.exe
+hideme
+*.db
+*.db-shm
+*.db-wal
