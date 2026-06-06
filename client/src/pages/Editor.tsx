@@ -3,8 +3,9 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { C, F } from "../theme/tokens";
 import { Icon } from "../components/Icon";
 import { useSettings } from "../context/SettingsContext";
+import { getUploadBaseURL } from "../api/uploadConfig";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
 function getToken() {
   const raw = localStorage.getItem("hideme_auth");
@@ -272,6 +273,7 @@ export default function Editor() {
         form.append('thumbnail', thumbBlob, baseName + '_thumb.jpg');
       }
 
+      const uploadBase = await getUploadBaseURL();
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.upload.onprogress = (ev) => {
@@ -294,7 +296,7 @@ export default function Editor() {
           }
         };
         xhr.onerror = () => reject(new Error('Network error'));
-        xhr.open('POST', `${BASE_URL}/v1/collections/${collectionId}/files`);
+        xhr.open('POST', `${uploadBase}/v1/collections/${collectionId}/files`);
         xhr.setRequestHeader('Authorization', `Bearer ${getToken()}`);
         xhr.setRequestHeader('X-Upload-ID', uploadId);
         xhr.timeout = 7200000;

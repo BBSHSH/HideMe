@@ -101,6 +101,7 @@ func main() {
 	api.POST("/auth/login", handlers.Login(database))
 	api.GET("/auth/settings", handlers.GetAuthSettings(database))
 	api.PUT("/auth/settings", middleware.RequireAuth(), middleware.RequireAdmin(), handlers.UpdateAuthSettings(database))
+	api.GET("/upload-config", handlers.GetUploadConfig(cfg))
 
 	// Discord OAuth2
 	api.GET("/auth/discord", handlers.DiscordOAuthRedirect(cfg))

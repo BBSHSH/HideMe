@@ -43,6 +43,12 @@ type Config struct {
 		RequiredRole string `yaml:"required_role"`
 	} `yaml:"discord"`
 
+	Upload struct {
+		// true にすると大きいファイルのアップロードを DirectURL に直接送信（Cloudflare 制限回避）
+		UseDirectURL bool   `yaml:"use_direct_url"`
+		DirectURL    string `yaml:"direct_url"` // 例: http://グローバルIP:8080
+	} `yaml:"upload"`
+
 	FFmpeg struct {
 		Path string `yaml:"path"`
 	} `yaml:"ffmpeg"`
