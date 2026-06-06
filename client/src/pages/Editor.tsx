@@ -96,7 +96,7 @@ export default function Editor() {
     encodingPercent: 0,
     nasPercent: 0,
   });
-  const sseRef = useRef<EventSource | null>(null);
+  // sseRef は削除済み（ポーリングに移行）
 
   // ─── 動画ロード ───
   // blob URL の生成と破棄を useEffect で一元管理する。
@@ -222,33 +222,35 @@ export default function Editor() {
     const uploadId = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36);
     const baseName = outputName.trim() || file.name.replace(/\.[^.]+$/, "");
 
-    // SSE: サーバー側エンコード進捗 + NAS 転送進捗
-    const sse = new EventSource(`${BASE_URL}/v1/upload-progress/${uploadId}`);
-    sseRef.current = sse;
-    sse.onmessage = (ev) => {
-      try {
-        const d = JSON.parse(ev.data) as { phase: string; percent?: number; message?: string };
-        if (d.phase === 'ffmpeg') {
-          setUploadProgress((p) => ({ ...p, phase: 'encoding', encodingPercent: d.percent ?? 0 }));
-        } else if (d.phase === 'nas') {
-          setUploadProgress((p) => ({ ...p, phase: 'nas', encodingPercent: 100, nasPercent: d.percent ?? 0 }));
-        } else if (d.phase === 'done') {
-          setUploadProgress({ phase: 'done', encodingPercent: 100, sendPercent: 100, nasPercent: 100 });
-          sse.close();
-          if (settings.uploadNotification && Notification.permission === 'granted') {
-            new Notification('アップロード完了', { body: file?.name ?? 'ファイルがアップロードされました' });
-          } else if (settings.uploadNotification && Notification.permission === 'default') {
-            Notification.requestPermission().then((p) => {
-              if (p === 'granted') new Notification('アップロード完了', { body: file?.name ?? 'ファイルがアップロードされました' });
-            });
+    // ポーリングで進捗を取得（SSEはCloudflare経由で切断されるため）
+    let pollingTimer: ReturnType<typeof setInterval> | null = null;
+    const startPolling = () => {
+      pollingTimer = setInterval(async () => {
+        try {
+          const res = await fetch(`${BASE_URL}/v1/upload-status/${uploadId}`);
+          if (!res.ok) return;
+          const d = await res.json() as { phase: string; percent?: number; message?: string; file_id?: string };
+          if (d.phase === 'ffmpeg') {
+            setUploadProgress((p) => ({ ...p, phase: 'encoding', encodingPercent: d.percent ?? 0 }));
+          } else if (d.phase === 'nas') {
+            setUploadProgress((p) => ({ ...p, phase: 'nas', encodingPercent: 100, nasPercent: d.percent ?? 0 }));
+          } else if (d.phase === 'done') {
+            setUploadProgress({ phase: 'done', encodingPercent: 100, sendPercent: 100, nasPercent: 100 });
+            if (pollingTimer) clearInterval(pollingTimer);
+            if (settings.uploadNotification && Notification.permission === 'granted') {
+              new Notification('アップロード完了', { body: file?.name ?? 'ファイルがアップロードされました' });
+            } else if (settings.uploadNotification && Notification.permission === 'default') {
+              Notification.requestPermission().then((p) => {
+                if (p === 'granted') new Notification('アップロード完了', { body: file?.name ?? 'ファイルがアップロードされました' });
+              });
+            }
+          } else if (d.phase === 'error') {
+            setUploadProgress((p) => ({ ...p, phase: 'error', error: d.message ?? 'エラー' }));
+            if (pollingTimer) clearInterval(pollingTimer);
           }
-        } else if (d.phase === 'error') {
-          setUploadProgress((p) => ({ ...p, phase: 'error', error: d.message ?? 'エラー' }));
-          sse.close();
-        }
-      } catch {}
+        } catch {}
+      }, 2000); // 2秒ごとにポーリング
     };
-    sse.onerror = () => sse.close();
 
     try {
       setUploadProgress({ phase: 'sending', sendPercent: 0, encodingPercent: 0, nasPercent: 0 });
@@ -280,12 +282,15 @@ export default function Editor() {
 
       setUploadProgress((p) => ({ ...p, sendPercent: 100 }));
 
+      // チャンク結合・エンコード中はポーリングで進捗を監視
+      startPolling();
+
     } catch (err) {
+      if (pollingTimer) clearInterval(pollingTimer);
       setUploadProgress({
         phase: 'error', sendPercent: 0, encodingPercent: 0, nasPercent: 0,
         error: err instanceof Error ? err.message : 'エラーが発生しました',
       });
-      sse.close();
     }
   };
 

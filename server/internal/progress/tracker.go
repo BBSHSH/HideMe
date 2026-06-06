@@ -8,13 +8,13 @@ import (
 type Phase string
 
 const (
-	PhaseFFmpeg Phase = "ffmpeg" // サーバー側 AV1 エンコード
+	PhaseFFmpeg Phase = "ffmpeg" // サーバー側エンコード
 	PhaseNAS    Phase = "nas"    // NAS への転送
 	PhaseDone   Phase = "done"
 	PhaseError  Phase = "error"
 )
 
-// Event は SSE に流すイベント
+// Event は進捗イベント
 type Event struct {
 	Phase   Phase   `json:"phase"`
 	Percent float64 `json:"percent,omitempty"`
@@ -22,13 +22,17 @@ type Event struct {
 	Message string  `json:"message,omitempty"`
 }
 
-// Tracker は uploadId ごとにチャネルを管理する
+// Tracker は uploadId ごとにチャネルと最新状態を管理する
 type Tracker struct {
 	mu       sync.Mutex
 	channels map[string]chan Event
+	latest   map[string]Event // ポーリング用に最新イベントを保持
 }
 
-var Global = &Tracker{channels: make(map[string]chan Event)}
+var Global = &Tracker{
+	channels: make(map[string]chan Event),
+	latest:   make(map[string]Event),
+}
 
 func (t *Tracker) Register(id string) chan Event {
 	ch := make(chan Event, 64)
@@ -41,6 +45,7 @@ func (t *Tracker) Register(id string) chan Event {
 func (t *Tracker) Send(id string, ev Event) {
 	t.mu.Lock()
 	ch, ok := t.channels[id]
+	t.latest[id] = ev // 最新状態を常に保持
 	t.mu.Unlock()
 	if ok {
 		select {
@@ -50,6 +55,14 @@ func (t *Tracker) Send(id string, ev Event) {
 	}
 }
 
+// Latest は指定 ID の最新イベントを返す（ポーリング用）
+func (t *Tracker) Latest(id string) (Event, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	ev, ok := t.latest[id]
+	return ev, ok
+}
+
 func (t *Tracker) Close(id string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -57,4 +70,12 @@ func (t *Tracker) Close(id string) {
 		close(ch)
 		delete(t.channels, id)
 	}
+	// latest は done/error 後も一定時間保持（ポーリングが間に合うように）
+}
+
+// CleanLatest は最新状態を削除する（done/error 確認後に呼ぶ）
+func (t *Tracker) CleanLatest(id string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	delete(t.latest, id)
 }

@@ -171,6 +171,24 @@ func SSEUploadProgress() gin.HandlerFunc {
 	}
 }
 
+// PollUploadProgress はポーリング用の進捗取得エンドポイント
+// GET /v1/upload-status/:uploadId
+func PollUploadProgress() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		uploadID := c.Param("uploadId")
+		ev, ok := progress.Global.Latest(uploadID)
+		if !ok {
+			c.JSON(http.StatusNotFound, gin.H{"phase": "unknown"})
+			return
+		}
+		// done/error なら latest をクリア
+		if ev.Phase == progress.PhaseDone || ev.Phase == progress.PhaseError {
+			progress.Global.CleanLatest(uploadID)
+		}
+		c.JSON(http.StatusOK, ev)
+	}
+}
+
 func ListCollectionFiles(database *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		collectionID := c.Param("id")

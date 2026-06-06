@@ -126,8 +126,10 @@ func main() {
 	api.POST("/collections/:id/merge", middleware.RequireAuth(), handlers.MergeAndUpload(store, database, cfg.Storage.Type))
 	api.DELETE("/collections/:id/files/:fileID", middleware.RequireAuth(), handlers.DeleteCollectionFile(database, storeFor))
 
-	// SSE: アップロード進捗
+	// SSE: アップロード進捗（Cloudflare非経由の場合）
 	api.GET("/upload-progress/:uploadId", handlers.SSEUploadProgress())
+	// ポーリング: アップロード進捗（Cloudflare経由でSSEが切れる場合）
+	api.GET("/upload-status/:uploadId", handlers.PollUploadProgress())
 
 	// users (DM 相手選択用)
 	api.GET("/users", middleware.RequireAuth(), handlers.ListUsers(database))
