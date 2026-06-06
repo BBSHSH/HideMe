@@ -43,13 +43,26 @@ async function uploadChunk(
   if (!res.ok) throw new Error(`Chunk ${index} upload failed: ${res.status}`);
 }
 
-// チャンクアップロード：並列送信でCloudflareの100MB制限を回避
+// チャンクアップロード：direct_urlが設定されていればCloudflareを経由しない
 export async function uploadFileInChunks(opts: ChunkUploadOptions): Promise<Response> {
   const { file, collectionId, uploadId, trimStart, trimEnd, volume, resolution, fps, onSendProgress } = opts;
 
   const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-  const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
   const token = getToken();
+
+  // direct_urlが設定されていればそちらを使う（Cloudflare経由しない）
+  let BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+  try {
+    const cfgRes = await fetch(`${BASE_URL}/v1/upload-config`);
+    if (cfgRes.ok) {
+      const cfg = await cfgRes.json();
+      if (cfg.use_direct_url && cfg.upload_url) {
+        BASE_URL = cfg.upload_url;
+      }
+    }
+  } catch {
+    // フォールバック
+  }
 
   let completed = 0;
 
