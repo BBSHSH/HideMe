@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -70,7 +72,8 @@ func UploadCollectionImage(store storage.Storage) gin.HandlerFunc {
 		}
 		defer src.Close()
 
-		filename := fmt.Sprintf("collection-icons/%s%s", uuid.NewString(), ext)
+		// icon_ プレフィックスで動画・サムネイルと区別する
+		filename := fmt.Sprintf("icon_%s%s", uuid.NewString(), ext)
 		item, err := store.Upload(c.Request.Context(), filename, src, file.Size)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_upload_image"})
@@ -107,6 +110,13 @@ func DeleteCollection(database *sql.DB, store storage.Storage) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 
+		// コレクション情報（アイコン画像 URL）を取得
+		col, err := db.GetCollectionByID(database, id)
+		if err != nil && err != db.ErrCollectionNotFound {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_get_collection"})
+			return
+		}
+
 		// コレクション内の全ファイルを取得
 		files, err := db.ListFilesByCollection(database, id)
 		if err != nil {
@@ -114,11 +124,22 @@ func DeleteCollection(database *sql.DB, store storage.Storage) gin.HandlerFunc {
 			return
 		}
 
-		// NAS から各ファイルを削除
+		// 各ファイル（動画 + サムネイル）をストレージから削除
 		for _, file := range files {
 			if err := store.Delete(c.Request.Context(), file.FileName); err != nil {
-				log.Printf("[WARN] Failed to delete file from NAS: %s, %v", file.FileName, err)
-				// NAS 削除失敗は続行（DB は削除する）
+				log.Printf("[WARN] delete video failed: %s, %v", file.FileName, err)
+			}
+			if file.ThumbnailName != "" {
+				if err := store.Delete(c.Request.Context(), file.ThumbnailName); err != nil {
+					log.Printf("[WARN] delete thumbnail failed: %s, %v", file.ThumbnailName, err)
+				}
+			}
+		}
+
+		// コレクションアイコン画像を削除（image_url はフル URL なので末尾のファイル名を抽出）
+		if iconName := fileNameFromURL(col.ImageURL); iconName != "" {
+			if err := store.Delete(c.Request.Context(), iconName); err != nil {
+				log.Printf("[WARN] delete collection icon failed: %s, %v", iconName, err)
 			}
 		}
 
@@ -129,4 +150,24 @@ func DeleteCollection(database *sql.DB, store storage.Storage) gin.HandlerFunc {
 		}
 		c.JSON(http.StatusOK, gin.H{"deleted": true})
 	}
+}
+
+// fileNameFromURL は image_url ("http://.../v1/files/icon_xxx.png") から
+// 末尾のファイル名を抽出する。URL でない場合はそのまま basename を返す。
+func fileNameFromURL(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	// クエリ・フラグメントを除去
+	if i := strings.IndexAny(raw, "?#"); i >= 0 {
+		raw = raw[:i]
+	}
+	base := path.Base(raw)
+	if decoded, err := url.PathUnescape(base); err == nil {
+		base = decoded
+	}
+	if base == "." || base == "/" {
+		return ""
+	}
+	return base
 }

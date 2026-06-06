@@ -47,6 +47,7 @@ func Register(database *sql.DB) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, gin.H{
 			"token":    token,
+			"user_id":  user.ID,
 			"username": user.Username,
 			"role":     user.Role,
 		})
@@ -87,6 +88,7 @@ func Login(database *sql.DB) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, gin.H{
 			"token":    token,
+			"user_id":  user.ID,
 			"username": user.Username,
 			"role":     user.Role,
 		})

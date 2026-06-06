@@ -1,0 +1,25 @@
+[Unit]
+Description=HideMe Server
+After=network.target
+
+[Service]
+Type=simple
+User=hideme
+WorkingDirectory=/home/hideme/HideMe/server
+ExecStart=/home/hideme/HideMe/server/hideme
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# 環境変数（必要に応じて編集）
+Environment="PORT=8080"
+# Environment="FFMPEG_PATH=/usr/bin/ffmpeg"
+# Environment="DB_PATH=/home/hideme/HideMe/server/hideme.db"
+# Environment="STORAGE_TYPE=nas"
+# Environment="STORAGE_NAS_ADDR=192.168.1.100"
+# Environment="STORAGE_NAS_USER=admin"
+# Environment="STORAGE_NAS_PASS=password"
+
+[Install]
+WantedBy=multi-user.target

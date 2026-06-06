@@ -76,7 +76,28 @@ func (s *SFTPStorage) List(ctx context.Context) ([]FileItem, error) {
 	return items, nil
 }
 
+// progressReader は Read のたびに onProgress を呼ぶラッパー
+type progressReader struct {
+	r          io.Reader
+	total      int64
+	loaded     int64
+	onProgress ProgressFunc
+}
+
+func (p *progressReader) Read(b []byte) (int, error) {
+	n, err := p.r.Read(b)
+	p.loaded += int64(n)
+	if p.onProgress != nil && p.total > 0 {
+		p.onProgress(p.loaded, p.total)
+	}
+	return n, err
+}
+
 func (s *SFTPStorage) Upload(ctx context.Context, name string, data io.Reader, size int64) (FileItem, error) {
+	return s.UploadWithProgress(ctx, name, data, size, nil)
+}
+
+func (s *SFTPStorage) UploadWithProgress(ctx context.Context, name string, data io.Reader, size int64, onProgress ProgressFunc) (FileItem, error) {
 	if s.cfg.MaxFileSize > 0 && size > s.cfg.MaxFileSize {
 		return FileItem{}, ErrFileTooLarge
 	}
@@ -95,14 +116,24 @@ func (s *SFTPStorage) Upload(ctx context.Context, name string, data io.Reader, s
 	}
 
 	target := s.uploadPath(name)
+	// サブフォルダ (thumbnails/ icons/) を作成
+	if dir := path.Dir(target); dir != s.cfg.UploadDir {
+		if err := client.MkdirAll(dir); err != nil {
+			return FileItem{}, fmt.Errorf("mkdir %s: %w", dir, err)
+		}
+	}
 	writer, err := client.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
 	if err != nil {
 		return FileItem{}, err
 	}
 	defer writer.Close()
 
+	var reader io.Reader = data
+	if onProgress != nil && size > 0 {
+		reader = &progressReader{r: data, total: size, onProgress: onProgress}
+	}
 	buf := make([]byte, s.cfg.ChunkSize)
-	if _, err := io.CopyBuffer(writer, data, buf); err != nil {
+	if _, err := io.CopyBuffer(writer, reader, buf); err != nil {
 		return FileItem{}, err
 	}
 
@@ -165,8 +196,8 @@ func (s *SFTPStorage) Open(ctx context.Context, name string) (io.ReadCloser, Fil
 }
 
 func (s *SFTPStorage) uploadPath(name string) string {
-	safe := path.Base(name)
-	return path.Join(s.cfg.UploadDir, safe)
+	sub := CleanSubPath(name)
+	return path.Join(s.cfg.UploadDir, sub)
 }
 
 func (s *SFTPStorage) ensureDirs(client *sftp.Client) error {

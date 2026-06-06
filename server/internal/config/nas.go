@@ -1,11 +1,18 @@
 package config
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 
 	"gopkg.in/yaml.v3"
+)
+
+// StorageType はファイルの保存先を表す
+type StorageType string
+
+const (
+	StorageNAS   StorageType = "nas"
+	StorageLocal StorageType = "local"
 )
 
 type NASConfig struct {
@@ -23,8 +30,17 @@ type NASConfig struct {
 	ChunkSize      int    `yaml:"chunk_size"`
 }
 
+// LocalConfig はサーバー本体のローカルストレージ設定
+type LocalConfig struct {
+	UploadDir   string `yaml:"upload_dir"`   // 保存ディレクトリ (例: ./uploads)
+	MaxFileSize int64  `yaml:"max_file_size"` // 0 = 無制限
+}
+
 type Config struct {
-	NAS NASConfig `yaml:"nas"`
+	// storage_type: "nas" または "local" (デフォルト: "nas")
+	StorageType StorageType `yaml:"storage_type"`
+	NAS         NASConfig   `yaml:"nas"`
+	Local       LocalConfig `yaml:"local"`
 }
 
 func Load(path string) (Config, error) {
@@ -38,20 +54,38 @@ func Load(path string) (Config, error) {
 		return Config{}, err
 	}
 
-	applyDefaults(&cfg.NAS)
+	// storage_type のデフォルト
+	if cfg.StorageType == "" {
+		cfg.StorageType = StorageNAS
+	}
 
+	applyNASDefaults(&cfg.NAS)
+	applyLocalDefaults(&cfg.Local)
+
+	// NAS 設定のパスワードは環境変数からも取得
 	if cfg.NAS.Password == "" {
 		cfg.NAS.Password = os.Getenv("NAS_PASSWORD")
 	}
 
-	if cfg.NAS.Host == "" || cfg.NAS.Username == "" || cfg.NAS.UploadDir == "" {
-		return Config{}, errors.New("nas config missing required fields")
+	// NAS モードのときのみ NAS 必須フィールドを検証
+	if cfg.StorageType == StorageNAS {
+		if cfg.NAS.Host == "" || cfg.NAS.Username == "" || cfg.NAS.UploadDir == "" {
+			return Config{}, errorf("nas config: host / username / upload_dir are required when storage_type is 'nas'")
+		}
 	}
 
 	return cfg, nil
 }
 
-func applyDefaults(nas *NASConfig) {
+func errorf(msg string) error {
+	return &configError{msg}
+}
+
+type configError struct{ msg string }
+
+func (e *configError) Error() string { return e.msg }
+
+func applyNASDefaults(nas *NASConfig) {
 	if nas.Port == 0 {
 		nas.Port = 22
 	}
@@ -65,12 +99,18 @@ func applyDefaults(nas *NASConfig) {
 		nas.RetryDelay = 5
 	}
 	if nas.MaxFileSize == 0 {
-		nas.MaxFileSize = 104857600
+		nas.MaxFileSize = 104857600 // 100 MB
 	}
 	if nas.ChunkSize == 0 {
-		nas.ChunkSize = 1048576
+		nas.ChunkSize = 1048576 // 1 MB
 	}
 	if nas.TempDir == "" {
 		nas.TempDir = "HideMe/tmp"
+	}
+}
+
+func applyLocalDefaults(local *LocalConfig) {
+	if local.UploadDir == "" {
+		local.UploadDir = "./uploads"
 	}
 }

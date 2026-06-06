@@ -2,3 +2,7 @@
 /storage/
 .env
 /config/nas.yaml
+/uploads/
+/tmp/
+*.exe
+/ffmpeg/ffmpeg.exe
