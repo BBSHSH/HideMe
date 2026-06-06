@@ -12,7 +12,13 @@ export function useLogin() {
     setError(null);
     try {
       const res = await apiLogin(username, password);
-      setUser(res);
+      setUser({
+        token: res.token,
+        userId: res.user_id,
+        username: res.username,
+        role: res.role,
+        auth_method: "password",
+      });
       return true;
     } catch {
       setError("ユーザー名またはパスワードが違います");

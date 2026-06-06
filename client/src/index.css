@@ -2,17 +2,51 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Chrome, Edge, Safari */
-::-webkit-scrollbar {
-    display: none;
-}
+/* ─── スクロールバー非表示 ──────────────────────── */
+::-webkit-scrollbar { display: none; }
+html { scrollbar-width: none; }
+body { -ms-overflow-style: none; }
 
-/* Firefox */
-html {
-    scrollbar-width: none;
-}
-
-/* IE, Edge(旧) */
+/* ─── ベーススタイル ────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
 body {
-    -ms-overflow-style: none;
+  margin: 0;
+  font-family: 'Manrope', sans-serif;
+  transition: background 0.25s, color 0.25s;
+}
+
+/* ─── アニメーション無効化 ─────────────────────── */
+html[data-animations="false"] *,
+html[data-animations="false"] *::before,
+html[data-animations="false"] *::after {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* ─── コンパクトモード ──────────────────────────── */
+html[data-compact="true"] {
+  --spacing-base: 8px;
+  --card-padding: 8px 12px;
+}
+html[data-compact="false"],
+html:not([data-compact]) {
+  --spacing-base: 16px;
+  --card-padding: 14px 18px;
+}
+
+/* ─── ライトモード select/input ─────────────────── */
+html[data-theme="light"] input,
+html[data-theme="light"] select,
+html[data-theme="light"] textarea {
+  color-scheme: light;
+}
+html[data-theme="light"] select option {
+  background: #f0f1f8;
+  color: #1a1b26;
+}
+
+/* ─── フォーカス ────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--c-primary);
+  outline-offset: 2px;
 }

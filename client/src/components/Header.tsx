@@ -1,10 +1,10 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import type { CSSProperties } from "react";
-import type { User } from "../App";
 import { useState } from "react";
 
 import { Icon } from "./Icon";
 import { C, F, glassPanel } from "../theme/tokens";
+import { useAuth } from "../context/AuthContext";
 
 export type NavItem = {
   id: string;
@@ -15,8 +15,6 @@ export type NavItem = {
 
 type HeaderProps = {
   navItems?: NavItem[];
-  onNewProject?: () => void;
-  user?: User;
   onLogout?: () => void;
 };
 
@@ -29,9 +27,9 @@ const defaultNavItems: NavItem[] = [
   },
   {
     id: "messages",
-    icon: "chat_bubble",
+    icon: "forum",
     label: "Chat",
-    path: "/messages",
+    path: "/chat",
   },
   {
     id: "storage",
@@ -80,10 +78,11 @@ const headerStyle: CSSProperties = {
 
 export default function Header({
   navItems = defaultNavItems,
-  onNewProject,
   onLogout,
 }: HeaderProps) {
   const [showMenu, setShowMenu] = useState(false);
+  const { user, isAdmin } = useAuth();
+  const navigate = useNavigate();
   return (
     <header style={headerStyle}>
       {/* Logo */}
@@ -300,16 +299,19 @@ export default function Header({
               justifyContent: "center",
               cursor: "pointer",
               transition: "all .45s cubic-bezier(.22,1,.36,1)",
+              overflow: "hidden",
+              padding: 0,
             }}
           >
-            <Icon
-              name="account_circle"
-              filled
-              size={24}
-              style={{
-                color: C.primary,
-              }}
-            />
+            {user?.avatar ? (
+              <img
+                src={user.avatar}
+                alt={user.username}
+                style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }}
+              />
+            ) : (
+              <Icon name="account_circle" filled size={24} style={{ color: C.primary }} />
+            )}
           </button>
 
           {/* Dropdown Menu */}
@@ -318,11 +320,7 @@ export default function Header({
               {/* Backdrop */}
               <div
                 onClick={() => setShowMenu(false)}
-                style={{
-                  position: "fixed",
-                  inset: 0,
-                  zIndex: 99,
-                }}
+                style={{ position: "fixed", inset: 0, zIndex: 99 }}
               />
 
               {/* Menu */}
@@ -332,7 +330,7 @@ export default function Header({
                   top: "100%",
                   right: 0,
                   marginTop: 12,
-                  minWidth: 200,
+                  minWidth: 220,
                   background: "linear-gradient(180deg, rgba(30,31,48,0.95) 0%, rgba(18,19,27,0.95) 100%)",
                   border: `1px solid ${C.outlineVariant}33`,
                   borderRadius: 16,
@@ -341,6 +339,71 @@ export default function Header({
                   boxShadow: "0 10px 40px rgba(0,0,0,0.6)",
                 }}
               >
+                {/* ユーザー情報 */}
+                <div
+                  style={{
+                    padding: "14px 16px",
+                    borderBottom: `1px solid ${C.outlineVariant}1a`,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                  }}
+                >
+                  {user?.avatar ? (
+                    <img
+                      src={user.avatar}
+                      alt=""
+                      style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover" }}
+                    />
+                  ) : (
+                    <Icon name="account_circle" filled size={32} style={{ color: C.primary }} />
+                  )}
+                  <div>
+                    <p style={{ margin: 0, fontWeight: 700, fontSize: 13, color: C.onSurface }}>
+                      {user?.username}
+                    </p>
+                    <p style={{ margin: 0, fontSize: 11, color: C.outlineVariant }}>
+                      {user?.auth_method === "discord" ? "Discord" : "通常ログイン"} ·{" "}
+                      {user?.role === "admin" ? "管理者" : "メンバー"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* 管理者: 認証設定 */}
+                {isAdmin && (
+                  <button
+                    onClick={() => {
+                      navigate("/admin/auth-settings");
+                      setShowMenu(false);
+                    }}
+                    style={{
+                      width: "100%",
+                      background: "transparent",
+                      border: "none",
+                      borderBottom: `1px solid ${C.outlineVariant}1a`,
+                      padding: "12px 16px",
+                      color: C.onSurface,
+                      fontSize: 14,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      transition: "all 0.2s",
+                      textAlign: "left",
+                    }}
+                    onMouseOver={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.background = "rgba(88,101,242,0.08)";
+                    }}
+                    onMouseOut={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                    }}
+                  >
+                    <Icon name="key" size={18} style={{ color: C.primary }} />
+                    認証設定
+                  </button>
+                )}
+
                 {/* Logout */}
                 <button
                   onClick={() => {
@@ -360,7 +423,7 @@ export default function Header({
                     alignItems: "center",
                     gap: 10,
                     transition: "all 0.2s",
-                    borderBottom: `1px solid ${C.outlineVariant}1a`,
+                    textAlign: "left",
                   }}
                   onMouseOver={(e) => {
                     (e.currentTarget as HTMLButtonElement).style.background = "rgba(248,107,107,0.1)";

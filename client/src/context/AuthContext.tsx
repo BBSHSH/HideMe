@@ -1,9 +1,12 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 
-type AuthUser = {
+export type AuthUser = {
   token: string;
+  userId: string;
   username: string;
   role: "admin" | "member";
+  auth_method?: "password" | "discord";
+  avatar?: string;
 };
 
 type AuthContextType = {

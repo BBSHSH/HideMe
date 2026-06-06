@@ -13,6 +13,23 @@ export async function apiGet<T>(path: string): Promise<T> {
   return res.json();
 }
 
+export async function apiPut<T>(path: string, body: unknown): Promise<T> {
+  const token = localStorage.getItem("hideme_auth")
+    ? JSON.parse(localStorage.getItem("hideme_auth")!).token
+    : null;
+
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: "PUT",
+    headers,
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`PUT ${path} failed: ${res.status}`);
+  return res.json();
+}
+
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
   const token = localStorage.getItem("hideme_auth")
     ? JSON.parse(localStorage.getItem("hideme_auth")!).token

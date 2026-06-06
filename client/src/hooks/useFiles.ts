@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
-import { listFiles, uploadFile } from "../api/files";
-import type { FileItem } from "../data/files";
+import { listDbFiles, listStorageFiles, uploadFile } from "../api/files";
 import { listCollections } from "../api/collections";
-import type { Collection } from "../data/files";
 
 export const useCollections = () => {
   const { data, loading, error } = useFetch(listCollections);
@@ -24,8 +22,15 @@ function useFetch<T>(fetcher: () => Promise<T>) {
   return { data, loading, error };
 }
 
+// 実ストレージのファイル一覧（NAS/ローカル）
+export const useStorageFiles = () => {
+  const { data, loading, error } = useFetch(listStorageFiles);
+  return { files: data?.items ?? [], loading, error };
+};
+
+// DB のコレクションファイル一覧（後方互換用）
 export const useFileList = () => {
-  const { data, loading, error } = useFetch(listFiles);
+  const { data, loading, error } = useFetch(listDbFiles);
   return { files: data?.items ?? [], loading, error };
 };
 

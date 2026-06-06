@@ -9,8 +9,10 @@ export type Collection = {
 export type CollectionFile = {
   id: string;
   collection_id: string;
+  collection_name: string;
   file_name: string;
   file_size: number;
+  thumbnail_name: string;
   uploaded_by: string;
   uploaded_at: string;
 };

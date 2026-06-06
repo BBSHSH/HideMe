@@ -6,7 +6,7 @@ import { Icon } from "../components/Icon";
 // ─── サイドバーのタブ定義 ──────────────────────────────────────────────────
 const NAV_ITEMS = [
   { icon: "grid_view",   label: "すべて",       to: "/file" },
-  { icon: "movie",       label: "動画",          to: "/file/video" },
+  { icon: "movie",       label: "動画",          to: "/file/videos" },
   { icon: "schedule",    label: "最近の項目",    to: "/file/recent" },
   { icon: "favorite",    label: "お気に入り",    to: "/file/favorites" },
   { icon: "auto_delete", label: "Cleanup",       to: "/file/cleanup" },
@@ -216,8 +216,10 @@ export default function FileLayout() {
       {/* ── Main（タブで切り替わる） ── */}
       <main
         style={{
-          flex:      1,
-          overflowY: "auto",
+          flex:     1,
+          overflow: "hidden",
+          display:  "flex",
+          flexDirection: "column",
         }}
       >
         <Outlet />

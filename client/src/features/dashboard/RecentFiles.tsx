@@ -1,17 +1,27 @@
 import { Icon } from "../../components/Icon";
 import { C, F } from "../../theme/tokens";
 import type { CSSProperties } from "react";
+import { useStorageFiles } from "../../hooks/useFiles";
+import { getDownloadUrl } from "../../api/files";
+import { formatBytes, formatRelativeTime } from "../../utils/format";
 
 const ACCENT   = C.primaryContainer;
 const ACCENT_L = C.primary;
 
-const files = [
-  { icon: "encrypted", name: "project_alpha_v2.enc",       meta: "2.4 MB • 12分前"  },
-  { icon: "policy",    name: "security_audit_report.pdf",  meta: "1.8 MB • 1時間前" },
-  { icon: "database",  name: "client_database_backup.sql", meta: "452 MB • 3時間前" },
-] as const;
+const VIDEO_EXTS = [".mp4", ".webm", ".mov", ".mkv", ".avi", ".flv", ".wmv"];
+const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"];
+
+function fileIcon(name: string): { icon: string; color: string } {
+  const lower = name.toLowerCase();
+  if (VIDEO_EXTS.some((e) => lower.endsWith(e))) return { icon: "movie", color: "#818cf8" };
+  if (IMAGE_EXTS.some((e) => lower.endsWith(e))) return { icon: "image", color: "#34d399" };
+  if (lower.endsWith(".pdf")) return { icon: "picture_as_pdf", color: "#f87171" };
+  return { icon: "insert_drive_file", color: ACCENT_L };
+}
 
 export function RecentFiles() {
+  const { files, loading, error } = useStorageFiles();
+
   return (
     <div
       style={{
@@ -59,52 +69,69 @@ export function RecentFiles() {
 
       {/* Rows */}
       <div>
-        {files.map((file, idx) => (
-          <div
-            key={idx}
-            style={{
-              padding: "16px 24px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              borderBottom: idx < files.length - 1 ? "1px solid rgba(88,101,242,0.05)" : "none",
-              transition: "background-color 0.2s",
-              cursor: "pointer",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(88,101,242,0.05)";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-              <div
-                style={{
-                  width: "40px",
-                  height: "40px",
-                  backgroundColor: "#0f172a",
-                  borderRadius: "8px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  border: "1px solid rgba(88,101,242,0.1)",
-                }}
+        {loading && (
+          <div style={{ padding: 24, textAlign: "center", color: C.outline, fontSize: 14 }}>Loading...</div>
+        )}
+        {error && (
+          <div style={{ padding: 24, textAlign: "center", color: "#f87171", fontSize: 14 }}>Failed to load</div>
+        )}
+        {!loading && !error && files.length === 0 && (
+          <div style={{ padding: 24, textAlign: "center", color: C.outline, fontSize: 14 }}>No files yet</div>
+        )}
+        {files.slice(0, 5).map((file, idx) => {
+          const { icon, color } = fileIcon(file.name);
+          return (
+            <div
+              key={file.name}
+              style={{
+                padding: "16px 24px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                borderBottom: idx < Math.min(files.length, 5) - 1 ? "1px solid rgba(88,101,242,0.05)" : "none",
+                transition: "background-color 0.2s",
+                cursor: "pointer",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(88,101,242,0.05)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    backgroundColor: "#0f172a",
+                    borderRadius: "8px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: "1px solid rgba(88,101,242,0.1)",
+                  }}
+                >
+                  <Icon name={icon} style={{ color }} />
+                </div>
+                <div>
+                  <p style={{ fontSize: "14px", fontWeight: 700, color: "#e2e8f0", margin: 0 }}>
+                    {file.name}
+                  </p>
+                  <p style={{ fontSize: "10px", color: C.outline, margin: 0 }}>
+                    {formatBytes(file.size)} • {formatRelativeTime(file.modified)}
+                  </p>
+                </div>
+              </div>
+              <button
+                style={{ background: "none", border: "none", cursor: "pointer", color: C.outlineVariant }}
+                onClick={() => window.open(getDownloadUrl(file.name), "_blank")}
               >
-                <Icon name={file.icon} style={{ color: ACCENT_L }} />
-              </div>
-              <div>
-                <p style={{ fontSize: "14px", fontWeight: 700, color: "#e2e8f0", margin: 0 }}>
-                  {file.name}
-                </p>
-                <p style={{ fontSize: "10px", color: C.outline, margin: 0 }}>{file.meta}</p>
-              </div>
+                <Icon name="download" />
+              </button>
             </div>
-            <button style={{ background: "none", border: "none", cursor: "pointer", color: C.outlineVariant }}>
-              <Icon name="more_vert" />
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

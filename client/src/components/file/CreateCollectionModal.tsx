@@ -14,7 +14,7 @@ interface Props {
 
 export default function CreateCollectionModal({ onClose, onCreated }: Props) {
   const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
+  const [description, _setDescription] = useState("");
   const [color, setColor] = useState(PRESET_COLORS[0]);
   const [icon] = useState("folder");
   const [imageURL, setImageURL] = useState<string | null>(null);
@@ -192,28 +192,6 @@ export default function CreateCollectionModal({ onClose, onCreated }: Props) {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="コレクション名"
-            style={{
-              background: `${C.surfaceVariant}80`,
-              border: `1px solid ${C.outlineVariant}33`,
-              borderRadius: 12,
-              padding: "12px 16px",
-              color: C.onSurface,
-              fontSize: 15,
-              fontFamily: F.family,
-              outline: "none",
-            }}
-          />
-        </div>
-
-        {/* Description */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <label style={{ fontSize: 13, fontWeight: 700, color: C.outlineVariant, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            説明
-          </label>
-          <input
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="任意"
             style={{
               background: `${C.surfaceVariant}80`,
               border: `1px solid ${C.outlineVariant}33`,

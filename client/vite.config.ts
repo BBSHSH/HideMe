@@ -7,4 +7,8 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  // .wasm ファイルを正しく処理（@ffmpeg/core シングルスレッド版は SharedArrayBuffer 不要）
+  optimizeDeps: {
+    exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util', '@ffmpeg/core'],
+  },
 })
