@@ -275,7 +275,7 @@ export default function Editor() {
         },
       });
 
-      if (mergeRes.status >= 400) {
+      if (!mergeRes.ok && mergeRes.status !== 202) {
         const b = await mergeRes.json().catch(() => ({}));
         throw new Error((b as {detail?:string;error?:string}).detail ?? (b as {error?:string}).error ?? `HTTP ${mergeRes.status}`);
       }
