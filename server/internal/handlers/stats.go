@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"log"
 	"net/http"
 
 	"github.com/BBSHSH/HideMe/server/internal/storage"
@@ -18,6 +19,7 @@ func GetStats(_ *sql.DB, store storage.Storage) gin.HandlerFunc {
 		// 実際のストレージ内のファイルを数える（DBではなく実体ベース）
 		items, err := store.List(c.Request.Context())
 		if err != nil {
+			log.Printf("[STATS] store.List error: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_get_stats"})
 			return
 		}

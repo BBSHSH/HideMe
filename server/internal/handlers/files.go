@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -183,6 +184,7 @@ func DownloadFile(database *sql.DB, storeFor StoreSelector) gin.HandlerFunc {
 				c.JSON(http.StatusNotFound, gin.H{"error": "file_not_found"})
 				return
 			}
+			log.Printf("[FILES] store.Open(%q, type=%s) error: %v", name, storageType, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_open_file"})
 			return
 		}
