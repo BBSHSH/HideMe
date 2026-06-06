@@ -61,14 +61,13 @@ export function uploadFileViaWebSocket(opts: WSUploadOptions): Promise<void> {
     ws.onmessage = (ev) => {
       try {
         const msg = JSON.parse(ev.data as string);
-        if (msg.type === "accepted") {
+        if (msg.type === "accepted" || msg.type === "processing") {
           ws.close();
           resolve();
         } else if (msg.error) {
           ws.close();
           reject(new Error(msg.error));
         }
-        // type: "processing" は無視（ポーリングで監視）
       } catch {}
     };
 

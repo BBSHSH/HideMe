@@ -21,7 +21,7 @@ import (
 
 var wsUpgrader = websocket.Upgrader{
 	CheckOrigin:     func(r *http.Request) bool { return true },
-	ReadBufferSize:  1024 * 1024,       // 1MB
+	ReadBufferSize:  4 * 1024 * 1024,  // 4MB
 	WriteBufferSize: 1024,
 }
 
@@ -63,6 +63,9 @@ func WSUpload(store storage.Storage, database *sql.DB, storageType string) gin.H
 			return
 		}
 		defer conn.Close()
+
+		// 最大メッセージサイズ: 2MB（クライアントは1MB単位で送信）
+		conn.SetReadLimit(2 * 1024 * 1024)
 
 		// 1. メタ情報を受信
 		_, metaBytes, err := conn.ReadMessage()
