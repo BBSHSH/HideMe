@@ -122,6 +122,8 @@ func main() {
 	// collection files
 	api.GET("/collections/:id/files", handlers.ListCollectionFiles(database))
 	api.POST("/collections/:id/files", middleware.RequireAuth(), handlers.UploadToCollection(store, database, cfg.Storage.Type))
+	api.POST("/collections/:id/chunk", middleware.RequireAuth(), handlers.UploadChunk())
+	api.POST("/collections/:id/merge", middleware.RequireAuth(), handlers.MergeAndUpload(store, database, cfg.Storage.Type))
 	api.DELETE("/collections/:id/files/:fileID", middleware.RequireAuth(), handlers.DeleteCollectionFile(database, storeFor))
 
 	// SSE: アップロード進捗

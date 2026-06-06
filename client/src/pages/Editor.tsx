@@ -3,14 +3,9 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { C, F } from "../theme/tokens";
 import { Icon } from "../components/Icon";
 import { useSettings } from "../context/SettingsContext";
-import { getUploadBaseURL } from "../api/uploadConfig";
+import { uploadFileInChunks } from "../api/chunkUpload";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
-
-function getToken() {
-  const raw = localStorage.getItem("hideme_auth");
-  return raw ? JSON.parse(raw).token : null;
-}
 
 // 秒 → "mm:ss.s" フォーマット
 function fmtTime(sec: number): string {
@@ -228,9 +223,7 @@ export default function Editor() {
     const baseName = outputName.trim() || file.name.replace(/\.[^.]+$/, "");
 
     // SSE: サーバー側エンコード進捗 + NAS 転送進捗
-    // アップロード直接URLが設定されている場合はSSEも同じURLに向ける（Cloudflare経由だと切断される）
-    const uploadBase = await getUploadBaseURL();
-    const sse = new EventSource(`${uploadBase}/v1/upload-progress/${uploadId}`);
+    const sse = new EventSource(`${BASE_URL}/v1/upload-progress/${uploadId}`);
     sseRef.current = sse;
     sse.onmessage = (ev) => {
       try {
@@ -262,48 +255,30 @@ export default function Editor() {
 
       const renamedFile = new File([file], baseName + file.name.slice(file.name.lastIndexOf(".")), { type: file.type });
 
-      const form = new FormData();
-      form.append('file', renamedFile, renamedFile.name);
-      form.append('trim_start', trimStart.toFixed(3));
-      form.append('trim_end', trimEnd.toFixed(3));
-      form.append('volume', String(volume));
-      form.append('resolution', resolution);
-      form.append('fps', String(fps));
+      // サムネイル生成（チャンクアップロード前に取得）
+      void extractThumbnail(); // TODO: チャンクアップロード後にサムネイルを別送信
 
-      const thumbBlob = await extractThumbnail();
-      if (thumbBlob) {
-        form.append('thumbnail', thumbBlob, baseName + '_thumb.jpg');
+      // チャンクアップロード（5MB単位に分割してCloudflareの100MB制限を回避）
+      const mergeRes = await uploadFileInChunks({
+        file: renamedFile,
+        collectionId,
+        uploadId,
+        trimStart,
+        trimEnd,
+        volume,
+        resolution,
+        fps,
+        onSendProgress: (percent) => {
+          setUploadProgress((p) => ({ ...p, phase: 'sending', sendPercent: percent }));
+        },
+      });
+
+      if (!mergeRes.ok) {
+        const b = await mergeRes.json().catch(() => ({}));
+        throw new Error((b as { detail?: string; error?: string }).detail ?? (b as { error?: string }).error ?? `HTTP ${mergeRes.status}`);
       }
 
-      const uploadBase = await getUploadBaseURL();
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.upload.onprogress = (ev) => {
-          if (ev.lengthComputable) {
-            setUploadProgress((p) => ({
-              ...p, phase: 'sending',
-              sendPercent: Math.round((ev.loaded / ev.total) * 100),
-            }));
-          }
-        };
-        xhr.onload = () => {
-          if (xhr.status < 300) {
-            setUploadProgress((p) => ({ ...p, sendPercent: 100 }));
-            resolve();
-          } else {
-            try {
-              const b = JSON.parse(xhr.responseText);
-              reject(new Error(b.detail ?? b.error ?? `HTTP ${xhr.status}`));
-            } catch { reject(new Error(`HTTP ${xhr.status}`)); }
-          }
-        };
-        xhr.onerror = () => reject(new Error('Network error'));
-        xhr.open('POST', `${uploadBase}/v1/collections/${collectionId}/files`);
-        xhr.setRequestHeader('Authorization', `Bearer ${getToken()}`);
-        xhr.setRequestHeader('X-Upload-ID', uploadId);
-        xhr.timeout = 7200000;
-        xhr.send(form);
-      });
+      setUploadProgress((p) => ({ ...p, sendPercent: 100 }));
 
     } catch (err) {
       setUploadProgress({

@@ -424,6 +424,127 @@ func UploadToCollection(store storage.Storage, database *sql.DB, storageType str
 	}
 }
 
+// processVideoFromPath は指定パスの動画ファイルをエンコードしてストレージに保存する（チャンクアップロード用）
+func processVideoFromPath(c *gin.Context, store storage.Storage, database *sql.DB, storageType, uploadID, fileName, inputPath string, trimStart, trimEnd float64, volumeVal int, resolution string, fpsVal int) {
+	collectionID := c.Param("id")
+
+	claims, _ := c.Get(middleware.ClaimsKey)
+	userID := ""
+	if claims != nil {
+		userID = claims.(*auth.Claims).UserID
+	}
+
+	tmpOut := filepath.Join(os.TempDir(), "hideme_out_"+uploadID+".mp4")
+	defer os.Remove(tmpOut)
+
+	totalSec, _ := getVideoDuration(inputPath)
+	if trimEnd > 0.01 && trimEnd > trimStart {
+		totalSec = trimEnd - trimStart
+	}
+
+	height := resolutionHeight(resolution)
+	ffArgs := buildFFmpegArgs(inputPath, tmpOut, trimStart, trimEnd, volumeVal, height, fpsVal)
+	log.Printf("[FFMPEG/CHUNK] start: %s -> %s crf=%d", fileName, resolution, crfForHeight(height))
+
+	if err := runFFmpeg(ffArgs, totalSec, func(pct float64) {
+		if uploadID != "" {
+			progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseFFmpeg, Percent: pct})
+		}
+	}); err != nil {
+		log.Printf("[FFMPEG/CHUNK] error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "encoding_failed", "detail": err.Error()})
+		if uploadID != "" {
+			progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseError, Message: "encoding_failed"})
+		}
+		return
+	}
+
+	if uploadID != "" {
+		progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseFFmpeg, Percent: 100})
+	}
+
+	outFile, err := os.Open(tmpOut)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_open_output"})
+		return
+	}
+	defer outFile.Close()
+
+	outInfo, _ := outFile.Stat()
+	outFileName := strings.TrimSuffix(fileName, filepath.Ext(fileName)) + ".mp4"
+
+	item, err := store.UploadWithProgress(
+		c.Request.Context(),
+		outFileName,
+		outFile,
+		outInfo.Size(),
+		func(loaded, total int64) {
+			if uploadID != "" && total > 0 {
+				progress.Global.Send(uploadID, progress.Event{
+					Phase:   progress.PhaseNAS,
+					Percent: math.Min(float64(loaded)/float64(total)*100, 99),
+				})
+			}
+		},
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_save_file"})
+		if uploadID != "" {
+			progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseError, Message: "nas_failed"})
+		}
+		return
+	}
+
+	cf, err := db.AddFileToCollection(database, collectionID, item.Name, "", storageType, item.Size, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_record_file"})
+		return
+	}
+
+	if uploadID != "" {
+		progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseDone, FileID: cf.ID})
+	}
+
+	log.Printf("[UPLOAD/CHUNK] done: id=%s size=%dMB", cf.ID, outInfo.Size()/1024/1024)
+	c.JSON(http.StatusOK, cf)
+}
+
+// uploadNonVideoFromReader は io.Reader から非動画ファイルをアップロードする（チャンクアップロード用）
+func uploadNonVideoFromReader(c *gin.Context, store storage.Storage, database *sql.DB, collectionID, storageType, uploadID string, fh *multipart.FileHeader, r io.Reader) {
+	claims, _ := c.Get(middleware.ClaimsKey)
+	userID := ""
+	if claims != nil {
+		userID = claims.(*auth.Claims).UserID
+	}
+
+	if uploadID != "" {
+		progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseNAS, Percent: 0})
+	}
+
+	item, err := store.Upload(c.Request.Context(), fh.Filename, r, fh.Size)
+	if err != nil {
+		log.Printf("[UPLOAD/CHUNK] non-video error: %v", err)
+		if uploadID != "" {
+			progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseError, Message: "nas_failed"})
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_save_file"})
+		return
+	}
+
+	cf, err := db.AddFileToCollection(database, collectionID, item.Name, "", storageType, item.Size, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_record_file"})
+		return
+	}
+
+	if uploadID != "" {
+		progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseNAS, Percent: 100})
+		progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseDone, FileID: cf.ID})
+	}
+
+	c.JSON(http.StatusCreated, cf)
+}
+
 func DeleteCollectionFile(database *sql.DB, storeFor StoreSelector) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		fileID := c.Param("fileID")
