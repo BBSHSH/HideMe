@@ -228,7 +228,9 @@ export default function Editor() {
     const baseName = outputName.trim() || file.name.replace(/\.[^.]+$/, "");
 
     // SSE: サーバー側エンコード進捗 + NAS 転送進捗
-    const sse = new EventSource(`${BASE_URL}/v1/upload-progress/${uploadId}`);
+    // アップロード直接URLが設定されている場合はSSEも同じURLに向ける（Cloudflare経由だと切断される）
+    const uploadBase = await getUploadBaseURL();
+    const sse = new EventSource(`${uploadBase}/v1/upload-progress/${uploadId}`);
     sseRef.current = sse;
     sse.onmessage = (ev) => {
       try {
