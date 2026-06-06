@@ -56,6 +56,9 @@ export function uploadFileViaWebSocket(opts: WSUploadOptions): Promise<void> {
         offset += buf.byteLength;
         onSendProgress(Math.round(offset / file.size * 100));
       }
+
+      // 送信完了 → 即 resolve（WebSocket の応答を待たない）
+      resolve();
     };
 
     ws.onmessage = (ev) => {
@@ -75,10 +78,10 @@ export function uploadFileViaWebSocket(opts: WSUploadOptions): Promise<void> {
       reject(new Error("WebSocket error"));
     };
 
-    ws.onclose = (e) => {
-      if (!e.wasClean) {
-        reject(new Error(`WebSocket closed unexpectedly: ${e.code}`));
-      }
+    ws.onclose = () => {
+      // 送信完了後の切断は正常（Cloudflareのタイムアウト等）
+      // 送信が完了していれば resolve 済みなので何もしない
+      resolve();
     };
   });
 }

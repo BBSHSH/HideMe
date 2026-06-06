@@ -260,7 +260,7 @@ export default function Editor() {
       // サムネイル生成（チャンクアップロード前に取得）
       void extractThumbnail(); // TODO: チャンクアップロード後にサムネイルを別送信
 
-      // WebSocket アップロード（Cloudflare経由でも高速）
+      // WebSocket アップロード（送信完了後は切断を無視してポーリングで監視）
       await uploadFileViaWebSocket({
         file: renamedFile,
         collectionId,
