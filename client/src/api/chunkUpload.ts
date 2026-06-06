@@ -1,4 +1,4 @@
-const CHUNK_SIZE = 20 * 1024 * 1024; // 20MB per chunk
+const CHUNK_SIZE = 95 * 1024 * 1024; // 95MB per chunk（Cloudflare上限100MB未満）
 const PARALLEL = 3; // 同時送信数
 
 function getToken() {
