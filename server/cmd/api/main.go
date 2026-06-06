@@ -163,6 +163,26 @@ func main() {
 		IdleTimeout:       60 * time.Second,
 	}
 
+	// HTTPS サーバー（証明書が存在する場合）
+	tlsCert := cfg.TLS.CertFile
+	tlsKey := cfg.TLS.KeyFile
+	if tlsCert != "" && tlsKey != "" {
+		tlsServer := &http.Server{
+			Addr:              ":" + fmt.Sprintf("%d", cfg.TLS.Port),
+			Handler:           router,
+			ReadTimeout:       0,
+			ReadHeaderTimeout: 10 * time.Second,
+			WriteTimeout:      0,
+			IdleTimeout:       60 * time.Second,
+		}
+		go func() {
+			log.Printf("HTTPS listening on :%d", cfg.TLS.Port)
+			if err := tlsServer.ListenAndServeTLS(tlsCert, tlsKey); err != nil && err != http.ErrServerClosed {
+				log.Printf("HTTPS server error: %v", err)
+			}
+		}()
+	}
+
 	log.Printf("api listening on :%s", port)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server error: %v", err)

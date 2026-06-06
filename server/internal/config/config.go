@@ -49,6 +49,12 @@ type Config struct {
 		DirectURL    string `yaml:"direct_url"` // 例: http://グローバルIP:8080
 	} `yaml:"upload"`
 
+	TLS struct {
+		Port     int    `yaml:"port"`      // デフォルト 8443
+		CertFile string `yaml:"cert_file"` // 例: /etc/letsencrypt/live/upload.hideme.jp/fullchain.pem
+		KeyFile  string `yaml:"key_file"`  // 例: /etc/letsencrypt/live/upload.hideme.jp/privkey.pem
+	} `yaml:"tls"`
+
 	FFmpeg struct {
 		Path string `yaml:"path"`
 	} `yaml:"ffmpeg"`
@@ -123,6 +129,9 @@ func Load(path string) error {
 	}
 	if Global.Server.Port == 0 {
 		Global.Server.Port = 8080
+	}
+	if Global.TLS.Port == 0 {
+		Global.TLS.Port = 8443
 	}
 	// FrontendURL が未設定なら API の URL を使う（本番は同一オリジン）
 	if Global.Public.FrontendURL == "" {
