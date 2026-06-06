@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { C, F } from "../theme/tokens";
 import { Icon } from "../components/Icon";
 import { useSettings } from "../context/SettingsContext";
-import { uploadFileViaWebSocket } from "../api/wsUpload";
+import { uploadFileInChunks } from "../api/chunkUpload";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -260,8 +260,8 @@ export default function Editor() {
       // サムネイル生成（チャンクアップロード前に取得）
       void extractThumbnail(); // TODO: チャンクアップロード後にサムネイルを別送信
 
-      // WebSocket アップロード（送信完了後は切断を無視してポーリングで監視）
-      await uploadFileViaWebSocket({
+      // チャンク方式（5MB単位）でアップロード
+      const mergeRes = await uploadFileInChunks({
         file: renamedFile,
         collectionId,
         uploadId,
@@ -274,6 +274,11 @@ export default function Editor() {
           setUploadProgress((p) => ({ ...p, phase: 'sending', sendPercent: percent }));
         },
       });
+
+      if (!mergeRes.ok && mergeRes.status !== 202) {
+        const b = await mergeRes.json().catch(() => ({}));
+        throw new Error((b as {detail?:string;error?:string}).detail ?? (b as {error?:string}).error ?? `HTTP ${mergeRes.status}`);
+      }
 
       setUploadProgress((p) => ({ ...p, sendPercent: 100 }));
 
