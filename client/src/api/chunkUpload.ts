@@ -1,5 +1,5 @@
 const CHUNK_SIZE = 95 * 1024 * 1024; // 95MB per chunk（Cloudflare上限100MB未満）
-const PARALLEL = 3; // 同時送信数
+const PARALLEL = 1; // 順番に送信（並列だとCloudflareに制限される）
 
 function getToken() {
   const raw = localStorage.getItem("hideme_auth");
