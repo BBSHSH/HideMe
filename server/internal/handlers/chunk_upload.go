@@ -1,16 +1,23 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
+	"github.com/BBSHSH/HideMe/server/internal/auth"
+	"github.com/BBSHSH/HideMe/server/internal/db"
+	"github.com/BBSHSH/HideMe/server/internal/middleware"
+	"github.com/BBSHSH/HideMe/server/internal/progress"
 	"github.com/BBSHSH/HideMe/server/internal/storage"
 	"github.com/gin-gonic/gin"
 )
@@ -119,29 +126,135 @@ func MergeAndUpload(store storage.Storage, database *sql.DB, storageType string)
 
 		log.Printf("[CHUNK] merged %d chunks → %s", totalChunks, fileName)
 
-		// 結合したファイルを multipart.FileHeader に偽装して UploadToCollection の処理を流用
-		mergedFile, err := os.Open(mergedPath)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_open_merged"})
-			return
+		// パラメータをコピーしてゴルーチンに渡す
+		collectionID := c.Param("id")
+		trimStart, _ := strconv.ParseFloat(c.GetHeader("X-Trim-Start"), 64)
+		trimEnd, _ := strconv.ParseFloat(c.GetHeader("X-Trim-End"), 64)
+		volumeVal, _ := strconv.Atoi(c.GetHeader("X-Volume"))
+		if volumeVal == 0 {
+			volumeVal = 100
 		}
-		defer mergedFile.Close()
-
-		info, _ := mergedFile.Stat()
-
-		// 既存の uploadVideo/uploadNonVideo を直接呼ぶため FileHeader を模倣
-		fh := &multipart.FileHeader{
-			Filename: fileName,
-			Size:     info.Size(),
+		resolution := c.GetHeader("X-Resolution")
+		if resolution == "" {
+			resolution = "720p"
 		}
-		// FormFile の代わりに直接処理する
-		// UploadToCollection と同じロジックを fh + mergedFile で実行
-		c.Set("_chunk_file_path", mergedPath)
-		c.Set("_chunk_file_header", fh)
+		fpsVal, _ := strconv.Atoi(c.GetHeader("X-FPS"))
+		if fpsVal == 0 {
+			fpsVal = 30
+		}
 
-		// コンテキストを直接使って処理を呼び出す
-		uploadToCollectionWithFile(c, store, database, storageType, fh, mergedFile)
+		// 認証情報を取得
+		claims, _ := c.Get(middleware.ClaimsKey)
+		userID := ""
+		if claims != nil {
+			userID = claims.(*auth.Claims).UserID
+		}
+
+		// 即座に 202 Accepted を返してバックグラウンドで処理
+		c.JSON(http.StatusAccepted, gin.H{"status": "processing", "upload_id": uploadID})
+
+		// バックグラウンドでエンコード・NAS転送
+		go func() {
+			defer os.RemoveAll(dir)
+			defer os.Remove(mergedPath)
+
+			if isVideoFilename(fileName) {
+				processVideoBackground(store, database, storageType, uploadID, collectionID, userID, fileName, mergedPath, trimStart, trimEnd, volumeVal, resolution, fpsVal)
+			} else {
+				uploadNonVideoBackground(store, database, storageType, uploadID, collectionID, userID, fileName, mergedPath)
+			}
+		}()
 	}
+}
+
+// processVideoBackground はバックグラウンドで動画エンコード・NAS転送を行う
+func processVideoBackground(store storage.Storage, database *sql.DB, storageType, uploadID, collectionID, userID, fileName, inputPath string, trimStart, trimEnd float64, volumeVal int, resolution string, fpsVal int) {
+	tmpOut := filepath.Join(os.TempDir(), "hideme_out_"+uploadID+".mp4")
+	defer os.Remove(tmpOut)
+
+	totalSec, _ := getVideoDuration(inputPath)
+	if trimEnd > 0.01 && trimEnd > trimStart {
+		totalSec = trimEnd - trimStart
+	}
+
+	height := resolutionHeight(resolution)
+	ffArgs := buildFFmpegArgs(inputPath, tmpOut, trimStart, trimEnd, volumeVal, height, fpsVal)
+	log.Printf("[FFMPEG/BG] start: %s -> %s", fileName, resolution)
+
+	if err := runFFmpeg(ffArgs, totalSec, func(pct float64) {
+		progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseFFmpeg, Percent: pct})
+	}); err != nil {
+		log.Printf("[FFMPEG/BG] error: %v", err)
+		progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseError, Message: "encoding_failed"})
+		return
+	}
+	progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseFFmpeg, Percent: 100})
+
+	outFile, err := os.Open(tmpOut)
+	if err != nil {
+		progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseError, Message: "failed_to_open_output"})
+		return
+	}
+	defer outFile.Close()
+
+	outInfo, _ := outFile.Stat()
+	outFileName := strings.TrimSuffix(fileName, filepath.Ext(fileName)) + ".mp4"
+
+	item, err := store.UploadWithProgress(
+		context.Background(),
+		outFileName,
+		outFile,
+		outInfo.Size(),
+		func(loaded, total int64) {
+			if total > 0 {
+				progress.Global.Send(uploadID, progress.Event{
+					Phase:   progress.PhaseNAS,
+					Percent: math.Min(float64(loaded)/float64(total)*100, 99),
+				})
+			}
+		},
+	)
+	if err != nil {
+		log.Printf("[NAS/BG] error: %v", err)
+		progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseError, Message: "nas_failed"})
+		return
+	}
+
+	cf, err := db.AddFileToCollection(database, collectionID, item.Name, "", storageType, item.Size, userID)
+	if err != nil {
+		progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseError, Message: "db_failed"})
+		return
+	}
+
+	progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseDone, FileID: cf.ID})
+	log.Printf("[UPLOAD/BG] done: id=%s size=%dMB", cf.ID, outInfo.Size()/1024/1024)
+}
+
+// uploadNonVideoBackground はバックグラウンドで非動画ファイルをNASに転送する
+func uploadNonVideoBackground(store storage.Storage, database *sql.DB, storageType, uploadID, collectionID, userID, fileName, filePath string) {
+	progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseNAS, Percent: 0})
+
+	f, err := os.Open(filePath)
+	if err != nil {
+		progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseError, Message: "failed_to_open_file"})
+		return
+	}
+	defer f.Close()
+
+	info, _ := f.Stat()
+	item, err := store.Upload(context.Background(), fileName, f, info.Size())
+	if err != nil {
+		progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseError, Message: "nas_failed"})
+		return
+	}
+
+	cf, err := db.AddFileToCollection(database, collectionID, item.Name, "", storageType, item.Size, userID)
+	if err != nil {
+		progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseError, Message: "db_failed"})
+		return
+	}
+
+	progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseDone, FileID: cf.ID})
 }
 
 // uploadToCollectionWithFile は既に開いているファイルを使ってアップロード処理を行う
