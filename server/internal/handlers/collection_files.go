@@ -178,7 +178,8 @@ func PollUploadProgress() gin.HandlerFunc {
 		uploadID := c.Param("uploadId")
 		ev, ok := progress.Global.Latest(uploadID)
 		if !ok {
-			c.JSON(http.StatusNotFound, gin.H{"phase": "unknown"})
+			// まだ処理が始まっていない（受信中）→ 200 で waiting を返す
+			c.JSON(http.StatusOK, gin.H{"phase": "waiting"})
 			return
 		}
 		// done/error なら latest をクリア
