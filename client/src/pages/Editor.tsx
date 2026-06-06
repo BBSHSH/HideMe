@@ -223,7 +223,7 @@ export default function Editor() {
   const handleUpload = async () => {
     if (!file || !collectionId || uploadProgress.phase !== 'idle') return;
 
-    const uploadId = crypto.randomUUID();
+    const uploadId = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36);
     const baseName = outputName.trim() || file.name.replace(/\.[^.]+$/, "");
 
     // SSE: サーバー側エンコード進捗 + NAS 転送進捗
