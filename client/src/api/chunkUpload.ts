@@ -1,4 +1,4 @@
-const CHUNK_SIZE = 50 * 1024 * 1024; // 50MB per chunk
+const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB per chunk
 const PARALLEL = 1; // 順番に送信（並列だとCloudflareに制限される）
 
 function getToken() {
