@@ -1,0 +1,50 @@
+# ── 機密情報 ──────────────────────────────────────────
+.env
+.env.*
+*.yaml
+*.yml
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# ── データベース ──────────────────────────────────────
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# ── バイナリ・ビルド成果物 ────────────────────────────
+server/hideme
+server/hideme.exe
+server/*.exe
+server/dist/
+*.exe
+
+# ── ログ・一時ファイル ────────────────────────────────
+*.log
+/tmp/
+server/tmp/
+server/uploads/
+server/storage/
+
+# ── ffmpeg ────────────────────────────────────────────
+server/ffmpeg/
+/ffmpeg/
+
+# ── Node.js ──────────────────────────────────────────
+node_modules/
+client/dist/
+
+# ── OS ───────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDE ──────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
