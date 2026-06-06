@@ -49,8 +49,11 @@ async function uploadDirect(
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.upload.onprogress = (ev) => {
-      if (ev.lengthComputable) {
+      if (ev.lengthComputable && ev.total > 0) {
         onSendProgress(Math.round(ev.loaded / ev.total * 100));
+      } else {
+        // lengthComputable が false でも loaded でアニメーション
+        onSendProgress(1); // 少なくとも開始を示す
       }
     };
     xhr.onload = () => resolve(new Response(xhr.responseText, { status: xhr.status }));
