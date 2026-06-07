@@ -95,10 +95,8 @@ func MergeAndUpload(store storage.Storage, database *sql.DB, storageType string)
 
 		// チャンクを結合して一時ファイルに書き出す
 		dir := chunkTmpDir(uploadID)
-		defer os.RemoveAll(dir)
 
 		mergedPath := filepath.Join(os.TempDir(), "hideme_merged_"+uploadID+filepath.Ext(fileName))
-		defer os.Remove(mergedPath)
 
 		out, err := os.Create(mergedPath)
 		if err != nil {
