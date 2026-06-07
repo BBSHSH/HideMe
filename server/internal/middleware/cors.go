@@ -17,7 +17,7 @@ func CORS() gin.HandlerFunc {
 		c.Header("Vary", "Origin")
 
 		c.Header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Upload-ID")
+		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Upload-ID, X-Chunk-Index, X-Total-Chunks, X-File-Name, X-Trim-Start, X-Trim-End, X-Volume, X-Resolution, X-FPS")
 		c.Header("Access-Control-Expose-Headers", "Content-Length, Content-Range")
 
 		if c.Request.Method == http.MethodOptions {
