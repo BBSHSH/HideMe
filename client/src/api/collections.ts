@@ -103,6 +103,6 @@ export const uploadCollectionImage = async (file: File): Promise<string> => {
   if (!response.ok) throw new Error("Upload failed");
   const data = await response.json();
 
-  // file_name を使う（既に "icons/uuid.ext" 形式）
-  return `${import.meta.env.VITE_API_BASE_URL ?? ""}/v1/files/${encodeURIComponent(data.file_name)}`;
+  // ファイル名のみ返す（"icons/uuid.ext" 形式）→ CollectionGrid側でURLに変換
+  return data.file_name;
 };
