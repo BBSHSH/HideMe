@@ -96,6 +96,8 @@ export default function CollectionGrid({
                 col.ImageURL
                   ? col.ImageURL.startsWith("http")
                     ? col.ImageURL
+                    : col.ImageURL.startsWith("/")
+                    ? `${BASE_URL}${col.ImageURL}`
                     : `${BASE_URL}/v1/files/${col.ImageURL}`
                   : undefined
               }
