@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { C, F } from "../theme/tokens";
 import { Icon } from "../components/Icon";
 import { useSettings } from "../context/SettingsContext";
+import { uploadFileInChunks } from "../api/chunkUpload";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -259,31 +260,19 @@ export default function Editor() {
       // サムネイル生成（チャンクアップロード前に取得）
       void extractThumbnail(); // TODO: チャンクアップロード後にサムネイルを別送信
 
-      // multipart/form-data でアップロード
-      const token = JSON.parse(localStorage.getItem("hideme_auth") || "{}").token ?? "";
-      const formData = new FormData();
-      formData.append("file", renamedFile);
-      formData.append("upload_id", uploadId);
-      formData.append("trim_start", String(trimStart));
-      formData.append("trim_end", String(trimEnd));
-      formData.append("volume", String(volume));
-      formData.append("resolution", resolution);
-      formData.append("fps", String(fps));
-
-      const mergeRes = await new Promise<Response>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", `${BASE_URL}/v1/collections/${collectionId}/files`);
-        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-        xhr.setRequestHeader("X-Upload-ID", uploadId);
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            const percent = Math.round((e.loaded / e.total) * 100);
-            setUploadProgress((p) => ({ ...p, phase: 'sending', sendPercent: percent }));
-          }
-        };
-        xhr.onload = () => resolve(new Response(xhr.responseText, { status: xhr.status }));
-        xhr.onerror = () => reject(new Error("ネットワークエラー"));
-        xhr.send(formData);
+      // チャンク方式（5MB単位）でアップロード
+      const mergeRes = await uploadFileInChunks({
+        file: renamedFile,
+        collectionId,
+        uploadId,
+        trimStart,
+        trimEnd,
+        volume,
+        resolution,
+        fps,
+        onSendProgress: (percent) => {
+          setUploadProgress((p) => ({ ...p, phase: 'sending', sendPercent: percent }));
+        },
       });
 
       if (!mergeRes.ok && mergeRes.status !== 202) {
