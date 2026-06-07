@@ -5,9 +5,11 @@ import CollectionGrid from "../../components/file/CollectionGrid";
 import AllFilesGrid from "../../components/file/AllFilesGrid";
 import StorageStats from "../../components/file/StorageStats";
 import UploadModal from "../../components/file/UploadModal";
+import { useIsMobile } from "../../hooks/useIsMobile";
 
 export default function AllFilesPage() {
   const [showUpload, setShowUpload] = useState(false);
+  const isMobile = useIsMobile();
   return (
     <div
       style={{
@@ -15,7 +17,7 @@ export default function AllFilesPage() {
         minHeight: 0,
         display: "flex",
         flexDirection: "column",
-        padding: "20px 32px",
+        padding: isMobile ? "12px 16px" : "20px 32px",
         gap: 16,
         overflow: "hidden",
         boxSizing: "border-box",

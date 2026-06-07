@@ -5,11 +5,13 @@ import { Icon } from "../../components/Icon";
 import CollectionGrid from "../../components/file/CollectionGrid";
 import AllVideosGrid from "../../components/file/AllVideosGrid";
 import StorageStats from "../../components/file/StorageStats";
+import { useIsMobile } from "../../hooks/useIsMobile";
 
 export default function VideoFilesPage() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [, setRefresh] = useState(0);
+  const isMobile = useIsMobile();
 
   const handleUploadClick = () => fileInputRef.current?.click();
 
@@ -28,7 +30,7 @@ export default function VideoFilesPage() {
         minHeight: 0,
         display: "flex",
         flexDirection: "column",
-        padding: "12px 32px",
+        padding: isMobile ? "12px 16px" : "12px 32px",
         gap: 10,
         overflow: "hidden",
         boxSizing: "border-box",

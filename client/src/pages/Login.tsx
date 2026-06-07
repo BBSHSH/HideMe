@@ -60,7 +60,9 @@ export default function Login() {
     >
       <div
         style={{
-          width: 400,
+          width: "100%",
+          maxWidth: 400,
+          margin: "0 16px",
           background:
             "linear-gradient(180deg, rgba(30,31,48,0.98) 0%, rgba(18,19,27,0.98) 100%)",
           border: `1px solid ${C.outlineVariant}33`,

@@ -5,6 +5,7 @@ import { Icon } from "../components/Icon";
 import { useTheme, useColors } from "../context/ThemeContext";
 import { useSettings } from "../context/SettingsContext";
 import { useAuth } from "../context/AuthContext";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 // ─── Toggle ────────────────────────────────────────────────
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
@@ -250,6 +251,7 @@ export default function Settings() {
   const navigate = useNavigate();
   const C = useColors();
   const { settings, update, reset } = useSettings();
+  const isMobile = useIsMobile();
   const [resetConfirm, setResetConfirm] = useState(false);
   const [inputDevices,  setInputDevices]  = useState<MediaDeviceInfo[]>([]);
   const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[]>([]);
@@ -264,7 +266,7 @@ export default function Settings() {
   return (
     <div style={{
       flex: 1, minHeight: 0, overflowY: "auto",
-      padding: "28px 36px",
+      padding: isMobile ? "16px" : "28px 36px",
       background: C.background, color: C.onSurface,
       fontFamily: F.family, boxSizing: "border-box",
     }}>
@@ -292,7 +294,7 @@ export default function Settings() {
       {/* グリッドレイアウト */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: "repeat(3, 1fr)",
+        gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)",
         gap: 16,
       }}>
 

@@ -5,6 +5,7 @@ import { Icon } from "../components/Icon";
 import { useAuth } from "../context/AuthContext";
 import { formatBytes, formatRelativeTime } from "../utils/format";
 import CollectionGrid from "../components/file/CollectionGrid";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -180,6 +181,7 @@ export default function Dashboard() {
   const collectionCount = useCollectionCount();
   const recentFiles = useAllFiles(6);
   const { messages: chatMsgs } = useRecentChat();
+  const isMobile = useIsMobile();
 
   const now = new Date();
   const hour = now.getHours();
@@ -199,8 +201,8 @@ export default function Dashboard() {
     <div style={{
       flex: 1, minHeight: 0,
       display: "flex", flexDirection: "column",
-      padding: "20px 32px", gap: 14,
-      overflow: "hidden", boxSizing: "border-box",
+      padding: isMobile ? "16px" : "20px 32px", gap: 14,
+      overflow: isMobile ? "auto" : "hidden", boxSizing: "border-box",
       fontFamily: F.family, color: C.onSurface,
     }}>
 
@@ -208,11 +210,11 @@ export default function Dashboard() {
       <div style={{ flexShrink: 0, display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
         <div>
           <p style={{ margin: 0, fontSize: 12, color: C.outlineVariant }}>{greeting}、</p>
-          <h1 style={{ margin: "1px 0 0", fontSize: 24, fontWeight: 800, letterSpacing: "-0.03em" }}>
+          <h1 style={{ margin: "1px 0 0", fontSize: isMobile ? 20 : 24, fontWeight: 800, letterSpacing: "-0.03em" }}>
             {user?.username ?? "Guest"}
           </h1>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: isMobile ? 6 : 8, alignItems: "center" }}>
           {[
             { icon: "perm_media", label: "ファイル", path: "/file" },
             { icon: "forum",      label: "チャット", path: "/chat" },
@@ -220,7 +222,7 @@ export default function Dashboard() {
           ].map((a) => (
             <button key={a.label} onClick={() => navigate(a.path)} style={{
               display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
-              padding: "8px 12px", borderRadius: 10,
+              padding: isMobile ? "6px 8px" : "8px 12px", borderRadius: 10,
               border: "1px solid rgba(88,101,242,0.12)",
               background: "rgba(88,101,242,0.04)",
               color: C.onSurfaceVariant, fontSize: 10, fontWeight: 700,
@@ -229,14 +231,14 @@ export default function Dashboard() {
             onMouseEnter={(e) => { const el = e.currentTarget as HTMLElement; el.style.background = "rgba(88,101,242,0.12)"; el.style.color = "#bec2ff"; }}
             onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; el.style.background = "rgba(88,101,242,0.04)"; el.style.color = C.onSurfaceVariant; }}>
               <Icon name={a.icon} size={16} />
-              {a.label}
+              {isMobile ? "" : a.label}
             </button>
           ))}
         </div>
       </div>
 
       {/* ── Stats ── */}
-      <div style={{ flexShrink: 0, display: "flex", gap: 12 }}>
+      <div style={{ flexShrink: 0, display: "flex", flexDirection: isMobile ? "column" : "row", gap: 12 }}>
         <InfoCard icon="storage"     label="使用ストレージ" value={formatBytes(stats.total_size_bytes)} sub={`${stats.total_files} ファイル`} />
         <InfoCard icon="folder_open" label="総ファイル数"   value={stats.total_files.toLocaleString()} sub={formatBytes(stats.total_size_bytes)} />
         <InfoCard icon="collections" label="コレクション数" value={String(collectionCount)} sub={`${stats.total_files} ファイル · ${formatBytes(stats.total_size_bytes)}`} />
@@ -252,10 +254,18 @@ export default function Dashboard() {
       </div>
 
       {/* ── ボトム：最近のファイル ＋ チャット ── */}
-      <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 14, overflow: "hidden" }}>
+      <div style={{
+        flex: isMobile ? "none" : 1,
+        minHeight: 0,
+        display: "flex",
+        flexDirection: isMobile ? "column" : "row",
+        gap: 14,
+        overflow: isMobile ? "visible" : "hidden",
+      }}>
 
         {/* 最近のファイル */}
-        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8, overflow: "hidden" }}>
+        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8, overflow: "hidden",
+          minHeight: isMobile ? 240 : 0 }}>
           <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <p style={sectionLabel}>最近のファイル</p>
             {seeAll("/file")}
@@ -275,7 +285,11 @@ export default function Dashboard() {
         </div>
 
         {/* チャットウィジェット */}
-        <div style={{ width: 300, flexShrink: 0, display: "flex", flexDirection: "column", gap: 8, overflow: "hidden" }}>
+        <div style={{
+          width: isMobile ? "100%" : 300, flexShrink: 0,
+          display: "flex", flexDirection: "column", gap: 8, overflow: "hidden",
+          minHeight: isMobile ? 240 : 0,
+        }}>
           <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <p style={sectionLabel}>最近のメッセージ</p>
             {seeAll("/chat", "チャットへ →")}

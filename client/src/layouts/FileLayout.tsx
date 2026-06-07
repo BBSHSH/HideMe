@@ -2,6 +2,7 @@ import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { C, F } from "../theme/tokens";
 import { Icon } from "../components/Icon";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 // ─── サイドバーのタブ定義 ──────────────────────────────────────────────────
 const NAV_ITEMS = [
@@ -100,12 +101,14 @@ function FilterDot({ color, label }: { color: string; label: string }) {
 // ─── FileLayout ───────────────────────────────────────────────────────────────
 export default function FileLayout() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   return (
     <div
       style={{
         display:         "flex",
-        height:          "calc(100vh - 80px)", // ヘッダー高さ分引く（Layout.tsxに合わせて調整）
+        flexDirection:   isMobile ? "column" : "row",
+        height:          "calc(100vh - 80px)",
         fontFamily:      F.family,
         background:      C.background,
         backgroundImage: "radial-gradient(circle at 2px 2px, rgba(88,101,242,0.05) 1px, transparent 0)",
@@ -113,105 +116,139 @@ export default function FileLayout() {
         color:           C.onSurface,
       }}
     >
-      {/* ── Sidebar ── */}
-      <aside
-        style={{
-          width:          288,
-          flexShrink:     0,
-          display:        "flex",
-          flexDirection:  "column",
-          padding:        "32px 0",
-          background:     `${C.surfaceContainerLow}aa`,
+      {/* ── Sidebar (デスクトップ) / 上部タブナビ (モバイル) ── */}
+      {isMobile ? (
+        /* モバイル: 上部スクロール可能タブ */
+        <nav style={{
+          display: "flex", flexShrink: 0, overflowX: "auto",
+          padding: "8px 12px", gap: 6,
+          background: `${C.surfaceContainerLow}aa`,
           backdropFilter: "blur(20px)",
-          borderRight:    `1px solid ${C.outlineVariant}33`,
-          boxShadow:      "4px 0 24px rgba(0,0,0,0.2)",
-          overflowY:      "auto",
-        }}
-      >
-        <nav
+          borderBottom: `1px solid ${C.outlineVariant}33`,
+          scrollbarWidth: "none",
+        }}>
+          {NAV_ITEMS.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === "/file"}
+              style={({ isActive }) => ({
+                display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
+                padding: "8px 14px", borderRadius: 20, textDecoration: "none",
+                background: isActive ? `${C.primaryContainer}33` : "transparent",
+                border: `1px solid ${isActive ? C.primary + "44" : "transparent"}`,
+                color: isActive ? C.primary : C.onSurfaceVariant,
+                fontSize: 13, fontWeight: 700, fontFamily: F.family,
+                whiteSpace: "nowrap",
+              })}
+            >
+              {({ isActive }) => (
+                <>
+                  <Icon name={item.icon} filled={isActive} size={16} />
+                  {item.label}
+                </>
+              )}
+            </NavLink>
+          ))}
+        </nav>
+      ) : (
+        /* デスクトップ: 左サイドバー */
+        <aside
           style={{
-            display:       "flex",
-            flexDirection: "column",
-            gap:           8,
-            padding:       "0 16px",
+            width:          288,
+            flexShrink:     0,
+            display:        "flex",
+            flexDirection:  "column",
+            padding:        "32px 0",
+            background:     `${C.surfaceContainerLow}aa`,
+            backdropFilter: "blur(20px)",
+            borderRight:    `1px solid ${C.outlineVariant}33`,
+            boxShadow:      "4px 0 24px rgba(0,0,0,0.2)",
+            overflowY:      "auto",
           }}
         >
-          {/* Section label */}
-          <p
-            style={{
-              margin:          "0 0 16px",
-              fontSize:        14,
-              fontWeight:      600,
-              color:           C.outlineVariant,
-              textTransform:   "uppercase",
-              letterSpacing:   "0.1em",
-              padding:         "0 20px",
-            }}
-          >
-            Main View
-          </p>
-
-          {NAV_ITEMS.map((item) => (
-            <SidebarLink key={item.to} {...item} />
-          ))}
-
-          {/* Filters */}
-          <p
-            style={{
-              margin:        "64px 0 16px",
-              fontSize:      14,
-              fontWeight:    600,
-              color:         C.outlineVariant,
-              textTransform: "uppercase",
-              letterSpacing: "0.1em",
-              padding:       "0 20px",
-            }}
-          >
-            Filters
-          </p>
-          <div
+          <nav
             style={{
               display:       "flex",
               flexDirection: "column",
               gap:           8,
-              padding:       "0 20px",
+              padding:       "0 16px",
             }}
           >
-            {FILTER_DOTS.map((f) => (
-              <FilterDot key={f.label} {...f} />
-            ))}
-          </div>
-        </nav>
+            <p
+              style={{
+                margin:          "0 0 16px",
+                fontSize:        14,
+                fontWeight:      600,
+                color:           C.outlineVariant,
+                textTransform:   "uppercase",
+                letterSpacing:   "0.1em",
+                padding:         "0 20px",
+              }}
+            >
+              Main View
+            </p>
 
-        {/* Storage Settings ボタン */}
-        <div
-          style={{ padding: "0 20px", marginTop: "auto", paddingBottom: 64 }}
-        >
-          <button
-            onClick={() => navigate("/settings")}
-            style={{
-              width:          "100%",
-              background:     C.surfaceVariant,
-              border:         `1px solid ${C.outlineVariant}4d`,
-              color:          C.onSurface,
-              fontWeight:     700,
-              fontSize:       16,
-              padding:        "16px 0",
-              borderRadius:   24,
-              display:        "flex",
-              alignItems:     "center",
-              justifyContent: "center",
-              gap:            8,
-              cursor:         "pointer",
-              fontFamily:     "inherit",
-              transition:     "background 0.2s",
-            }}
+            {NAV_ITEMS.map((item) => (
+              <SidebarLink key={item.to} {...item} />
+            ))}
+
+            <p
+              style={{
+                margin:        "64px 0 16px",
+                fontSize:      14,
+                fontWeight:    600,
+                color:         C.outlineVariant,
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                padding:       "0 20px",
+              }}
+            >
+              Filters
+            </p>
+            <div
+              style={{
+                display:       "flex",
+                flexDirection: "column",
+                gap:           8,
+                padding:       "0 20px",
+              }}
+            >
+              {FILTER_DOTS.map((f) => (
+                <FilterDot key={f.label} {...f} />
+              ))}
+            </div>
+          </nav>
+
+          <div
+            style={{ padding: "0 20px", marginTop: "auto", paddingBottom: 64 }}
           >
-            <Icon name="settings" />
-            Storage Settings
-          </button>
-        </div>
-      </aside>
+            <button
+              onClick={() => navigate("/settings")}
+              style={{
+                width:          "100%",
+                background:     C.surfaceVariant,
+                border:         `1px solid ${C.outlineVariant}4d`,
+                color:          C.onSurface,
+                fontWeight:     700,
+                fontSize:       16,
+                padding:        "16px 0",
+                borderRadius:   24,
+                display:        "flex",
+                alignItems:     "center",
+                justifyContent: "center",
+                gap:            8,
+                cursor:         "pointer",
+                fontFamily:     "inherit",
+                transition:     "background 0.2s",
+              }}
+            >
+              <Icon name="settings" />
+              Storage Settings
+            </button>
+          </div>
+        </aside>
+      )}
 
       {/* ── Main（タブで切り替わる） ── */}
       <main
@@ -220,6 +257,7 @@ export default function FileLayout() {
           overflow: "hidden",
           display:  "flex",
           flexDirection: "column",
+          minHeight: 0,
         }}
       >
         <Outlet />

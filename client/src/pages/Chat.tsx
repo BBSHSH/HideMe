@@ -3,6 +3,7 @@ import { useColors } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
 import { Icon } from "../components/Icon";
 import { F } from "../theme/tokens";
+import { useIsMobile } from "../hooks/useIsMobile";
 import {
   getChannels, createChannel, deleteChannel,
   getMessages, postMessage, deleteMessage,
@@ -413,6 +414,8 @@ type ActiveView = { kind: "none" } | { kind: "channel"; channel: Channel } | { k
 export default function Chat() {
   const C = useColors();
   const { user, isAdmin } = useAuth();
+  const isMobile = useIsMobile();
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(true);
 
   const [channels,       setChannels]       = useState<Channel[]>([]);
   const [dmConvs,        setDmConvs]        = useState<DMConversation[]>([]);
@@ -556,6 +559,15 @@ export default function Chat() {
   const textChannels  = channels.filter((c) => c.type !== "voice");
   const voiceChannels = channels.filter((c) => c.type === "voice");
 
+  const handleSelectChannel = (ch: Channel) => {
+    setActive({ kind: "channel", channel: ch });
+    if (isMobile) setMobileSidebarOpen(false);
+  };
+  const handleSelectDM = (conv: DMConversation) => {
+    setActive({ kind: "dm", conv });
+    if (isMobile) setMobileSidebarOpen(false);
+  };
+
   return (
     <div style={{ height: "calc(100vh - 72px)", display: "flex", overflow: "hidden",
       fontFamily: F.family, background: C.background }}>
@@ -592,9 +604,12 @@ export default function Chat() {
       )}
 
       {/* ── サイドバー ── */}
-      <div style={{ width: 240, flexShrink: 0, background: C.surfaceContainerLow,
+      <div style={{
+        width: isMobile ? "100%" : 240, flexShrink: 0, background: C.surfaceContainerLow,
         borderRight: `1px solid ${C.outlineVariant}33`,
-        display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        display: isMobile && !mobileSidebarOpen ? "none" : "flex",
+        flexDirection: "column", overflow: "hidden",
+      }}>
 
         <div style={{ padding: "14px 16px", fontWeight: 800, fontSize: 15, color: C.onSurface,
           borderBottom: `1px solid ${C.outlineVariant}33` }}>HideMe</div>
@@ -607,7 +622,7 @@ export default function Chat() {
             <SidebarItem key={ch.id}
               active={active.kind === "channel" && active.channel.id === ch.id}
               icon="#" label={ch.name}
-              onClick={() => setActive({ kind: "channel", channel: ch })}
+              onClick={() => handleSelectChannel(ch)}
               onDelete={isAdmin ? async () => { if (confirm("削除しますか？")) await deleteChannel(ch.id); } : undefined}
             />
           ))}
@@ -638,7 +653,7 @@ export default function Chat() {
               <SidebarItem key={conv.id} active={active.kind === "dm" && active.conv.id === conv.id}
                 label={p.name} avatar={p.avatar}
                 subLabel={conv.last_message ? conv.last_message.slice(0, 22) + (conv.last_message.length > 22 ? "…" : "") : undefined}
-                onClick={() => setActive({ kind: "dm", conv })}
+                onClick={() => handleSelectDM(conv)}
               />
             );
           })}
@@ -660,7 +675,10 @@ export default function Chat() {
       </div>
 
       {/* ── メインエリア ── */}
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{
+        flex: 1, minWidth: 0, display: isMobile && mobileSidebarOpen ? "none" : "flex",
+        flexDirection: "column", overflow: "hidden",
+      }}>
         {active.kind === "none" ? (
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
             flexDirection: "column", gap: 12, color: C.outline }}>
@@ -672,6 +690,14 @@ export default function Chat() {
             {/* ヘッダー */}
             <div style={{ padding: "12px 16px", borderBottom: `1px solid ${C.outlineVariant}33`,
               background: C.surface, flexShrink: 0, display: "flex", alignItems: "center", gap: 10 }}>
+              {isMobile && (
+                <button onClick={() => setMobileSidebarOpen(true)} style={{
+                  background: "transparent", border: "none", cursor: "pointer", padding: 4,
+                  color: C.onSurfaceVariant, display: "flex", alignItems: "center",
+                }}>
+                  <Icon name="arrow_back" size={22} style={{ color: C.onSurfaceVariant }} />
+                </button>
+              )}
               {active.kind === "dm"
                 ? <Avatar username={dmPartner(active.conv).name} avatar={dmPartner(active.conv).avatar} size={28} />
                 : <span style={{ fontSize: 20, color: C.outline }}>#</span>

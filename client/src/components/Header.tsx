@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Icon } from "./Icon";
 import { C, F, glassPanel } from "../theme/tokens";
 import { useAuth } from "../context/AuthContext";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 export type NavItem = {
   id: string;
@@ -81,10 +82,68 @@ export default function Header({
   onLogout,
 }: HeaderProps) {
   const [showMenu, setShowMenu] = useState(false);
+  const [showDrawer, setShowDrawer] = useState(false);
   const { user, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   return (
-    <header style={headerStyle}>
+    <>
+    {/* モバイル用ドロワー */}
+    {isMobile && showDrawer && (
+      <>
+        <div
+          onClick={() => setShowDrawer(false)}
+          style={{ position: "fixed", inset: 0, zIndex: 199, background: "rgba(0,0,0,0.6)" }}
+        />
+        <div style={{
+          position: "fixed", top: 0, left: 0, bottom: 0, width: 260, zIndex: 200,
+          background: "linear-gradient(180deg, rgba(30,31,48,0.98) 0%, rgba(18,19,27,0.98) 100%)",
+          borderRight: `1px solid ${C.outlineVariant}33`,
+          display: "flex", flexDirection: "column", padding: "24px 16px", gap: 8,
+          boxShadow: "8px 0 40px rgba(0,0,0,0.6)",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "0 8px 24px" }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: 10,
+              background: C.primaryContainer,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <Icon name="shield" filled size={20} style={{ color: "#fff" }} />
+            </div>
+            <span style={{ fontSize: 16, fontWeight: 900, color: C.primary, letterSpacing: "0.2em", textTransform: "uppercase" }}>
+              HideMe
+            </span>
+          </div>
+          {navItems.map((item) => (
+            <NavLink
+              key={item.id}
+              to={item.path}
+              end={item.path === "/"}
+              onClick={() => setShowDrawer(false)}
+              style={({ isActive }) => ({
+                display: "flex", alignItems: "center", gap: 14,
+                padding: "12px 16px", borderRadius: 12, textDecoration: "none",
+                color: isActive ? C.primary : C.onSurfaceVariant,
+                background: isActive ? "rgba(88,101,242,0.12)" : "transparent",
+                fontWeight: 700, fontSize: 15, fontFamily: F.family,
+              })}
+            >
+              {({ isActive }) => (
+                <>
+                  <Icon name={item.icon} filled={isActive} size={22} style={{ color: isActive ? C.primary : C.onSurfaceVariant }} />
+                  {item.label}
+                </>
+              )}
+            </NavLink>
+          ))}
+        </div>
+      </>
+    )}
+    <header style={{
+      ...headerStyle,
+      gridTemplateColumns: isMobile ? "auto 1fr auto" : "1fr auto 1fr",
+      padding: isMobile ? "0 16px" : "0 24px",
+    }}>
       {/* Logo */}
       <div
         style={{
@@ -156,10 +215,22 @@ export default function Header({
         </div>
       </div>
 
-      {/* Navigation */}
+      {/* Navigation (デスクトップのみ) / ハンバーガー (モバイルのみ) */}
+      {isMobile ? (
+        <button
+          onClick={() => setShowDrawer(true)}
+          style={{
+            background: "transparent", border: "none", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: C.onSurfaceVariant, padding: 8, borderRadius: 8,
+          }}
+        >
+          <Icon name="menu" size={26} style={{ color: C.onSurfaceVariant }} />
+        </button>
+      ) : null}
       <nav
         style={{
-          display: "flex",
+          display: isMobile ? "none" : "flex",
           alignItems: "center",
           gap: 4,
         }}
@@ -441,5 +512,6 @@ export default function Header({
         </div>
       </div>
     </header>
+    </>
   );
 }
