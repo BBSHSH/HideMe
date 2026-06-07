@@ -1,9 +1,10 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import Header from '../components/Header'
 import { useAuth } from '../context/AuthContext'
 
 export default function Layout() {
   const { logout } = useAuth()
+  const location = useLocation()
 
   return (
     <div className="min-h-screen bg-[#12131b] text-white">
@@ -42,13 +43,19 @@ export default function Layout() {
           50% { opacity: 0.5; }
         }
         .animate-pulse { animation: pulse 2s cubic-bezier(0.4,0,0.6,1) infinite; }
+        @keyframes pageIn {
+          0%   { opacity: 0; transform: translateY(10px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
       `}</style>
 
       <Header onLogout={logout} />
 
       {/* Header height: 72px を paddingTop で確保 */}
       <main style={{ paddingTop: 72 }}>
-        <Outlet />
+        <div key={location.pathname} style={{ animation: "pageIn 0.22s cubic-bezier(0.4,0,0.2,1) both" }}>
+          <Outlet />
+        </div>
       </main>
     </div>
   )

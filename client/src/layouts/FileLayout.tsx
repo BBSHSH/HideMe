@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { C, F } from "../theme/tokens";
 import { Icon } from "../components/Icon";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -101,6 +101,7 @@ function FilterDot({ color, label }: { color: string; label: string }) {
 // ─── FileLayout ───────────────────────────────────────────────────────────────
 export default function FileLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const isMobile = useIsMobile();
 
   return (
@@ -260,7 +261,15 @@ export default function FileLayout() {
           minHeight: 0,
         }}
       >
-        <Outlet />
+        <div
+          key={location.pathname}
+          style={{
+            flex: 1, minHeight: 0, display: "flex", flexDirection: "column",
+            animation: "pageIn 0.22s cubic-bezier(0.4,0,0.2,1) both",
+          }}
+        >
+          <Outlet />
+        </div>
       </main>
 
       <style>{`
@@ -277,6 +286,10 @@ export default function FileLayout() {
         @keyframes vaultPulse {
           0%, 100% { opacity: 1; transform: scale(1); }
           50%       { opacity: 0.8; transform: scale(1.02); }
+        }
+        @keyframes pageIn {
+          0%   { opacity: 0; transform: translateY(10px); }
+          100% { opacity: 1; transform: translateY(0); }
         }
       `}</style>
     </div>

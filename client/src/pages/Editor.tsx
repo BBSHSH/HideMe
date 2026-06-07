@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { C, F } from "../theme/tokens";
 import { Icon } from "../components/Icon";
 import { useSettings } from "../context/SettingsContext";
-import { uploadFileInChunks } from "../api/chunkUpload";
+import { useUpload } from "../context/UploadContext";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -19,16 +19,6 @@ function fmtTime(sec: number): string {
 
 type Resolution = "1080p" | "720p" | "480p" | "240p";
 type FPS = 24 | 30 | 60;
-type UploadPhase = "idle" | "encoding" | "sending" | "nas" | "done" | "error";
-
-interface UploadProgress {
-  phase: UploadPhase;
-  encodingPercent: number; // クライアント ffmpeg.wasm エンコード
-  sendPercent: number;     // クライアント → サーバー (XHR)
-  nasPercent: number;      // サーバー → NAS (SSE)
-  error?: string;
-}
-
 // ─── メインコンポーネント ───────────────────────────────
 
 interface CollectionItem { ID: string; Name: string; }
@@ -40,6 +30,7 @@ export default function Editor() {
 
   const file = state?.file ?? null;
   const { settings } = useSettings();
+  const { startUpload } = useUpload();
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -88,15 +79,6 @@ export default function Editor() {
       videoRef.current.volume = Math.min(1, volume / 100);
     }
   }, [volume]);
-
-  // アップロード進捗
-  const [uploadProgress, setUploadProgress] = useState<UploadProgress>({
-    phase: "idle",
-    sendPercent: 0,
-    encodingPercent: 0,
-    nasPercent: 0,
-  });
-  // sseRef は削除済み（ポーリングに移行）
 
   // ─── 動画ロード ───
   // blob URL の生成と破棄を useEffect で一元管理する。
@@ -202,96 +184,17 @@ export default function Editor() {
 
   // ─── アップロード ───
 
-  /** Canvas でサムネイル生成 */
-  const extractThumbnail = (): Promise<Blob | null> =>
-    new Promise((resolve) => {
-      const v = videoRef.current;
-      if (!v) return resolve(null);
-      const canvas = document.createElement("canvas");
-      canvas.width = 480;
-      canvas.height = 270;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return resolve(null);
-      ctx.drawImage(v, 0, 0, 480, 270);
-      canvas.toBlob((b) => resolve(b), "image/jpeg", 0.75);
-    });
+  const handleUpload = () => {
+    if (!file || !collectionId) return;
 
-  const handleUpload = async () => {
-    if (!file || !collectionId || uploadProgress.phase !== 'idle') return;
-
-    const uploadId = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36);
-    const baseName = outputName.trim() || file.name.replace(/\.[^.]+$/, "");
-
-    // ポーリングで進捗を取得（SSEはCloudflare経由で切断されるため）
-    let pollingTimer: ReturnType<typeof setInterval> | null = null;
-    const startPolling = () => {
-      pollingTimer = setInterval(async () => {
-        try {
-          const res = await fetch(`${BASE_URL}/v1/upload-status/${uploadId}`);
-          if (!res.ok) return;
-          const d = await res.json() as { phase: string; percent?: number; message?: string; file_id?: string };
-          if (d.phase === 'ffmpeg') {
-            setUploadProgress((p) => ({ ...p, phase: 'encoding', encodingPercent: d.percent ?? 0 }));
-          } else if (d.phase === 'nas') {
-            setUploadProgress((p) => ({ ...p, phase: 'nas', encodingPercent: 100, nasPercent: d.percent ?? 0 }));
-          } else if (d.phase === 'done') {
-            setUploadProgress({ phase: 'done', encodingPercent: 100, sendPercent: 100, nasPercent: 100 });
-            if (pollingTimer) clearInterval(pollingTimer);
-            if (settings.uploadNotification && Notification.permission === 'granted') {
-              new Notification('アップロード完了', { body: file?.name ?? 'ファイルがアップロードされました' });
-            } else if (settings.uploadNotification && Notification.permission === 'default') {
-              Notification.requestPermission().then((p) => {
-                if (p === 'granted') new Notification('アップロード完了', { body: file?.name ?? 'ファイルがアップロードされました' });
-              });
-            }
-          } else if (d.phase === 'error') {
-            setUploadProgress((p) => ({ ...p, phase: 'error', error: d.message ?? 'エラー' }));
-            if (pollingTimer) clearInterval(pollingTimer);
-          }
-        } catch {}
-      }, 2000); // 2秒ごとにポーリング
-    };
-
-    try {
-      setUploadProgress({ phase: 'sending', sendPercent: 0, encodingPercent: 0, nasPercent: 0 });
-
-      const renamedFile = new File([file], baseName + file.name.slice(file.name.lastIndexOf(".")), { type: file.type });
-
-      // サムネイル生成（チャンクアップロード前に取得）
-      void extractThumbnail(); // TODO: チャンクアップロード後にサムネイルを別送信
-
-      // チャンク方式（5MB単位）でアップロード
-      const mergeRes = await uploadFileInChunks({
-        file: renamedFile,
-        collectionId,
-        uploadId,
-        trimStart,
-        trimEnd,
-        volume,
-        resolution,
-        fps,
-        onSendProgress: (percent) => {
-          setUploadProgress((p) => ({ ...p, phase: 'sending', sendPercent: percent }));
-        },
-      });
-
-      if (!mergeRes.ok && mergeRes.status !== 202) {
-        const b = await mergeRes.json().catch(() => ({}));
-        throw new Error((b as {detail?:string;error?:string}).detail ?? (b as {error?:string}).error ?? `HTTP ${mergeRes.status}`);
-      }
-
-      setUploadProgress((p) => ({ ...p, sendPercent: 100 }));
-
-      // エンコード・NAS転送中はポーリングで進捗を監視
-      startPolling();
-
-    } catch (err) {
-      if (pollingTimer) clearInterval(pollingTimer);
-      setUploadProgress({
-        phase: 'error', sendPercent: 0, encodingPercent: 0, nasPercent: 0,
-        error: err instanceof Error ? err.message : 'エラーが発生しました',
-      });
+    // 通知許可リクエスト
+    if (settings.uploadNotification && Notification.permission === "default") {
+      Notification.requestPermission();
     }
+
+    // バックグラウンドアップロード開始 → すぐに前の画面に戻る
+    startUpload({ file, collectionId, trimStart, trimEnd, volume, resolution, fps, outputName });
+    navigate(-1);
   };
 
   const handleBack = () => navigate(-1);
@@ -754,154 +657,31 @@ export default function Editor() {
             </div>
           </section>
 
-          {/* ── アップロード進捗 ── */}
-          {uploadProgress.phase !== "idle" && (
-            <UploadProgressPanel progress={uploadProgress} />
-          )}
         </div>
 
         {/* ── アップロードボタン ── */}
-        <div
-          style={{
-            padding: 16,
-            borderTop: "1px solid rgba(69,70,85,0.2)",
-            background: "rgba(13,14,22,0.8)",
-          }}
-        >
-          {uploadProgress.phase === "done" ? (
-            <div style={{ textAlign: "center" }}>
-              <div style={{ color: "#4ade80", fontSize: 14, fontWeight: 700, marginBottom: 8 }}>
-                ✓ アップロード完了
-              </div>
-              <button
-                onClick={handleBack}
-                style={{
-                  width: "100%", padding: "12px 0",
-                  background: C.primaryContainer, color: C.onPrimaryContainer,
-                  border: "none", borderRadius: 8, fontWeight: 700,
-                  fontSize: 14, cursor: "pointer", fontFamily: F.family,
-                }}
-              >
-                コレクションに戻る
-              </button>
-            </div>
-          ) : uploadProgress.phase === "error" ? (
-            <div>
-              <div style={{ color: "#f87171", fontSize: 12, marginBottom: 8 }}>
-                {uploadProgress.error}
-              </div>
-              <button
-                onClick={() => setUploadProgress({ phase: "idle", sendPercent: 0, encodingPercent: 0, nasPercent: 0 })}
-                style={{
-                  width: "100%", padding: "12px 0",
-                  background: "rgba(248,113,113,0.15)", color: "#f87171",
-                  border: "1px solid rgba(248,113,113,0.3)", borderRadius: 8,
-                  fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: F.family,
-                }}
-              >
-                再試行
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={handleUpload}
-              disabled={uploadProgress.phase !== "idle"}
-              style={{
-                width: "100%", padding: "16px 0",
-                background: uploadProgress.phase !== "idle" ? "rgba(88,101,242,0.3)" : "#5865F2",
-                color: "#fff",
-                border: "none", borderRadius: 8, fontWeight: 700,
-                fontSize: 15, cursor: uploadProgress.phase !== "idle" ? "not-allowed" : "pointer",
-                fontFamily: F.family, transition: "all 0.2s",
-                boxShadow: uploadProgress.phase === "idle" ? "0 0 20px rgba(88,101,242,0.4)" : "none",
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              }}
-            >
-              <Icon name="cloud_upload" size={20} />
-              アップロード
-            </button>
-          )}
-
-          <p style={{ fontSize: 9, textAlign: "center", color: C.outline, marginTop: 6 }}>
-            {collectionId ? `Collection: ${collectionId.slice(0, 8)}...` : "コレクションが未選択"}
+        <div style={{ padding: 16, borderTop: "1px solid rgba(69,70,85,0.2)", background: "rgba(13,14,22,0.8)" }}>
+          <button
+            onClick={handleUpload}
+            disabled={!collectionId}
+            style={{
+              width: "100%", padding: "16px 0",
+              background: !collectionId ? "rgba(88,101,242,0.3)" : "#5865F2",
+              color: "#fff", border: "none", borderRadius: 8, fontWeight: 700,
+              fontSize: 15, cursor: !collectionId ? "not-allowed" : "pointer",
+              fontFamily: F.family, transition: "all 0.2s",
+              boxShadow: collectionId ? "0 0 20px rgba(88,101,242,0.4)" : "none",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            }}
+          >
+            <Icon name="cloud_upload" size={20} />
+            アップロード開始
+          </button>
+          <p style={{ fontSize: 10, textAlign: "center", color: C.outlineVariant, marginTop: 6 }}>
+            バックグラウンドでアップロードされます
           </p>
         </div>
       </aside>
     </div>
-  );
-}
-
-// ─── アップロード進捗パネル ───────────────────────────────
-
-function UploadProgressPanel({ progress }: { progress: UploadProgress }) {
-  // 処理順: 送信 → エンコード(サーバー) → NAS転送
-  const steps: { key: UploadPhase; label: string; percent: number }[] = [
-    { key: "sending",  label: "サーバーへ送信中",        percent: progress.sendPercent },
-    { key: "encoding", label: "エンコード中 (サーバー)", percent: progress.encodingPercent },
-    { key: "nas",      label: "NASへ転送中",             percent: progress.nasPercent },
-  ];
-
-  const activeIdx =
-    progress.phase === "sending"  ? 0 :
-    progress.phase === "encoding" ? 1 :
-    progress.phase === "nas"      ? 2 : 2;
-
-  return (
-    <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <style>{`
-        @keyframes indeterminate {
-          0%   { transform: translateX(-100%); }
-          100% { transform: translateX(400%); }
-        }
-      `}</style>
-      <h3 style={{
-        fontSize: 11, fontWeight: 700, color: "#5865F2",
-        textTransform: "uppercase", letterSpacing: "0.08em",
-        display: "flex", alignItems: "center", gap: 4,
-      }}>
-        <Icon name="cloud_upload" size={16} />
-        アップロード状況
-      </h3>
-
-      {steps.map((step, i) => {
-        const isDone   = i < activeIdx || progress.phase === "done";
-        const isActive = i === activeIdx && progress.phase !== "done";
-        const pct      = isDone ? 100 : isActive ? step.percent : 0;
-        // progress イベントが来ない間は不定幅アニメーションで「動いている」ことを示す
-        const isIndeterminate = isActive && pct === 0;
-
-        return (
-          <div key={step.key} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: isDone ? "#4ade80" : isActive ? "#bec2ff" : "#454655" }}>
-                {isDone ? "✓ " : isActive ? "● " : "○ "}
-                {step.label}
-              </span>
-              <span style={{ fontSize: 10, color: "#8f8fa0" }}>
-                {isIndeterminate ? "処理中..." : `${Math.round(pct)}%`}
-              </span>
-            </div>
-            <div style={{ height: 3, background: "rgba(69,70,85,0.3)", borderRadius: 2, overflow: "hidden", position: "relative" }}>
-              {isIndeterminate ? (
-                // 不定幅スクロールアニメーション
-                <div style={{
-                  position: "absolute", left: 0, top: 0, height: "100%", width: "25%",
-                  background: "#5865F2",
-                  boxShadow: "0 0 8px rgba(88,101,242,0.8)",
-                  animation: "indeterminate 1.4s ease-in-out infinite",
-                }} />
-              ) : (
-                <div style={{
-                  height: "100%", width: `${pct}%`,
-                  background: isDone ? "#4ade80" : "#5865F2",
-                  transition: "width 0.3s ease",
-                  boxShadow: isActive ? "0 0 6px rgba(88,101,242,0.6)" : "none",
-                }} />
-              )}
-            </div>
-          </div>
-        );
-      })}
-    </section>
   );
 }

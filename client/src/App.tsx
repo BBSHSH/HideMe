@@ -1,4 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { UploadProvider } from './context/UploadContext'
+import UploadProgressPanel from './components/file/UploadProgressPanel'
 import Layout from './layouts/Layout'
 import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
@@ -21,42 +23,44 @@ function App() {
   const { user, isAdmin } = useAuth()
 
   return (
-    <Routes>
-      {/* 認証不要ページ */}
-      <Route path="/login" element={<Login />} />
-      <Route path="/auth/discord/callback" element={<DiscordCallback />} />
+    <UploadProvider>
+      <UploadProgressPanel />
+      <Routes>
+        {/* 認証不要ページ */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/auth/discord/callback" element={<DiscordCallback />} />
 
-      {/* 保護されたルート */}
-      {user ? (
-        <Route element={<Layout />}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/editor" element={<Editor />} />
-          <Route path="/chat" element={<Chat />} />
+        {/* 保護されたルート */}
+        {user ? (
+          <Route element={<Layout />}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/editor" element={<Editor />} />
+            <Route path="/chat" element={<Chat />} />
 
-          {/* 管理者専用: 認証設定 */}
-          {isAdmin && (
-            <Route path="/admin/auth-settings" element={<AdminAuthSettings />} />
-          )}
+            {/* 管理者専用: 認証設定 */}
+            {isAdmin && (
+              <Route path="/admin/auth-settings" element={<AdminAuthSettings />} />
+            )}
 
-          <Route path="/file" element={<FileLayout />}>
-            <Route index element={<AllFilesPage />} />
+            <Route path="/file" element={<FileLayout />}>
+              <Route index element={<AllFilesPage />} />
+              <Route path="videos" element={<VideoFilesPage />} />
+              <Route path="/file/videocollection/:id" element={<VideoCollectionRedirect />} />
+              <Route path="/file/video/:fileId" element={<VideoAssetsPage />} />
+              <Route path="collection/:id" element={<CollectionDetailPage />} />
+              <Route path="recent" element={<RecentPage />} />
+              <Route path="favorites" element={<FavoritesPage />} />
+              <Route path="cleanup" element={<CleanupPage />} />
+            </Route>
 
-            <Route path="videos" element={<VideoFilesPage />} />
-            <Route path="/file/videocollection/:id" element={<VideoCollectionRedirect />} />
-            <Route path="/file/video/:fileId" element={<VideoAssetsPage />} />
-            <Route path="collection/:id" element={<CollectionDetailPage />} />
-            <Route path="recent" element={<RecentPage />} />
-            <Route path="favorites" element={<FavoritesPage />} />
-            <Route path="cleanup" element={<CleanupPage />} />
+            <Route path="*" element={<Navigate to="/" />} />
           </Route>
-
-          <Route path="*" element={<Navigate to="/" />} />
-        </Route>
-      ) : (
-        <Route path="*" element={<Navigate to="/login" />} />
-      )}
-    </Routes>
+        ) : (
+          <Route path="*" element={<Navigate to="/login" />} />
+        )}
+      </Routes>
+    </UploadProvider>
   )
 }
 

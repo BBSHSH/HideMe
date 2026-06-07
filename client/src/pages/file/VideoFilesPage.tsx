@@ -8,6 +8,26 @@ import { useIsMobile } from "../../hooks/useIsMobile";
 import VideoThumbnail from "../../components/file/VideoThumbnail";
 
 const VIDEO_EXTS = [".mp4", ".webm", ".mov", ".mkv", ".avi", ".flv", ".wmv"];
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+
+function fmtDur(sec: number): string {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+async function fetchDuration(fileName: string): Promise<string> {
+  return new Promise((resolve) => {
+    const v = document.createElement("video");
+    v.preload = "metadata";
+    v.src = `${BASE_URL}/v1/files/${encodeURIComponent(fileName)}`;
+    v.onloadedmetadata = () => { resolve(fmtDur(v.duration)); v.src = ""; };
+    v.onerror = () => resolve("");
+    setTimeout(() => { resolve(""); v.src = ""; }, 6000);
+  });
+}
 
 interface VideoFile {
   id: string;
@@ -22,16 +42,18 @@ interface VideoFile {
   color: string;
 }
 
-// ── VideoCard (YouTubeスタイル) ───────────────────────────────────────────────
-function VideoCard({ video, onPlay }: { video: VideoFile; onPlay: () => void }) {
+// ── VideoCard ─────────────────────────────────────────────────────────────────
+function VideoCard({ video, duration, onPlay }: { video: VideoFile; duration?: string; onPlay: () => void }) {
   const [hov, setHov] = useState(false);
+  const initial = (video.uploader_name || "?")[0].toUpperCase();
+  const S = { fontSize: 11 }; // smaller text scale
 
   return (
     <div
       onClick={onPlay}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
-      style={{ cursor: "pointer", display: "flex", flexDirection: "column", gap: 10 }}
+      style={{ cursor: "pointer", display: "flex", flexDirection: "column", gap: 7 }}
     >
       {/* サムネイル */}
       <div style={{
@@ -71,21 +93,29 @@ function VideoCard({ video, onPlay }: { video: VideoFile; onPlay: () => void }) 
           <div style={{ width: 6, height: 6, borderRadius: "50%", background: video.color || C.primary, flexShrink: 0 }} />
           <span style={{ fontSize: 10, color: "rgba(255,255,255,0.8)", fontWeight: 600 }}>{video.collection_name}</span>
         </div>
+        {/* 動画時間 */}
+        {duration && (
+          <div style={{
+            position: "absolute", bottom: 6, right: 6,
+            background: "rgba(0,0,0,0.85)",
+            borderRadius: 4, padding: "1px 6px",
+            fontSize: 10, fontWeight: 700, color: "#fff", letterSpacing: "0.02em",
+          }}>
+            {duration}
+          </div>
+        )}
       </div>
 
       {/* メタ情報 */}
-      <div style={{ display: "flex", gap: 10 }}>
-        {/* アバター */}
+      <div style={{ display: "flex", gap: 7 }}>
         <div style={{
-          width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
+          width: 24, height: 24, borderRadius: "50%", flexShrink: 0,
           background: "linear-gradient(135deg, #5865f2, #7c3aed)",
           display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
         }}>
           {video.uploader_avatar
             ? <img src={video.uploader_avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            : <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>
-                {(video.uploader_name || "?")[0].toUpperCase()}
-              </span>
+            : <span style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{initial}</span>
           }
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -96,10 +126,10 @@ function VideoCard({ video, onPlay }: { video: VideoFile; onPlay: () => void }) 
           }}>
             {video.file_name.replace(/\.[^.]+$/, "")}
           </p>
-          <p style={{ margin: "3px 0 0", fontSize: 11, color: C.onSurfaceVariant }}>
+          <p style={{ margin: "2px 0 0", fontSize: 11, color: C.onSurfaceVariant }}>
             {video.uploader_name || "Unknown"}
           </p>
-          <p style={{ margin: "1px 0 0", fontSize: 11, color: "rgba(255,255,255,0.3)" }}>
+          <p style={{ margin: "1px 0 0", fontSize: 10, color: "rgba(255,255,255,0.3)" }}>
             {formatBytes(video.file_size)} · {formatRelativeTime(video.uploaded_at)}
           </p>
         </div>
@@ -116,10 +146,12 @@ export default function VideoFilesPage() {
   const { collections } = useCollections();
   const isMobile = useIsMobile();
   const [allVideos, setAllVideos] = useState<VideoFile[]>([]);
+  const [durations, setDurations] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
   const activeCol = searchParams.get("collection") || "all";
-  const setActiveCol = (id: string) => setSearchParams(id === "all" ? {} : { collection: id }, { replace: true });
+  const setActiveCol = (id: string) =>
+    setSearchParams(id === "all" ? {} : { collection: id }, { replace: true });
 
   useEffect(() => {
     if (!collections.length) return;
@@ -135,12 +167,17 @@ export default function VideoFilesPage() {
       all.sort((a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime());
       setAllVideos(all);
       setLoading(false);
+      // 非同期で動画時間を取得（バックグラウンド）
+      all.forEach(async (v) => {
+        const dur = await fetchDuration(v.file_name);
+        if (dur) setDurations(prev => ({ ...prev, [v.id]: dur }));
+      });
     })();
   }, [collections]);
 
   const filtered = activeCol === "all" ? allVideos : allVideos.filter(v => v.collection_id === activeCol);
   const px = isMobile ? 16 : 28;
-  const cols = isMobile ? 1 : 3;
+  const cols = isMobile ? 2 : 5;
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -149,9 +186,8 @@ export default function VideoFilesPage() {
 
       {/* ── ヘッダー ── */}
       <div style={{
-        flexShrink: 0, padding: `14px ${px}px`,
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
-        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+        flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: `14px ${px}px`, borderBottom: "1px solid rgba(255,255,255,0.06)",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span className="material-symbols-outlined" style={{ fontSize: 22, color: C.primary }}>smart_display</span>
@@ -171,7 +207,7 @@ export default function VideoFilesPage() {
         </button>
       </div>
 
-      {/* ── コレクションフィルタータブ ── */}
+      {/* ── フィルタータブ ── */}
       <div style={{
         flexShrink: 0, display: "flex", gap: 8, padding: `10px ${px}px`,
         overflowX: "auto", borderBottom: "1px solid rgba(255,255,255,0.05)",
@@ -195,7 +231,7 @@ export default function VideoFilesPage() {
       </div>
 
       {/* ── グリッド ── */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: `20px ${px}px 40px` }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
         {loading ? (
           <div style={{ padding: 48, textAlign: "center", color: C.outlineVariant }}>読み込み中...</div>
         ) : filtered.length === 0 ? (
@@ -204,10 +240,11 @@ export default function VideoFilesPage() {
           <div style={{
             display: "grid",
             gridTemplateColumns: `repeat(${cols}, 1fr)`,
-            gap: 20,
+            gap: 14,
+            padding: `20px ${px}px 48px`,
           }}>
             {filtered.map(v => (
-              <VideoCard key={v.id} video={v} onPlay={() => navigate(`/file/video/${v.id}`)} />
+              <VideoCard key={v.id} video={v} duration={durations[v.id]} onPlay={() => navigate(`/file/video/${v.id}`)} />
             ))}
           </div>
         )}
