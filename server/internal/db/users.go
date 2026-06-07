@@ -19,6 +19,12 @@ type User struct {
 var ErrUserNotFound = errors.New("user not found")
 var ErrUsernameTaken = errors.New("username already taken")
 
+func CountUsers(db *sql.DB) (int, error) {
+	var count int
+	err := db.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&count)
+	return count, err
+}
+
 func CreateUser(db *sql.DB, username, hashedPassword, role string) (User, error) {
 	id := uuid.NewString()
 	_, err := db.Exec(

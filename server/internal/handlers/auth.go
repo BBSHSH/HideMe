@@ -22,6 +22,13 @@ func Register(database *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		// ユーザーが1人でも存在する場合は登録不可（初回のみ許可）
+		count, err := db.CountUsers(database)
+		if err != nil || count > 0 {
+			c.JSON(http.StatusForbidden, gin.H{"error": "registration_disabled"})
+			return
+		}
+
 		role := "member"
 		if body.Role == "admin" {
 			role = "admin"
