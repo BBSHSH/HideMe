@@ -1,7 +1,6 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { C, F } from "../../theme/tokens";
-import { Icon } from "../../components/Icon";
 import CollectionGrid from "../../components/file/CollectionGrid";
 import AllFilesGrid from "../../components/file/AllFilesGrid";
 import StorageStats from "../../components/file/StorageStats";

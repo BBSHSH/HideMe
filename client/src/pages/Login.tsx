@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { C, F } from "../theme/tokens";
-import { Icon } from "../components/Icon";
 import appIcon from "../assets/icon.png";
 import { useLogin } from "../hooks/useAuth";
 import { getAuthSettings, getDiscordLoginURL, type AuthSettings } from "../api/auth";

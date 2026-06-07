@@ -1,11 +1,10 @@
-import { Outlet, useLocation } from 'react-router-dom'
+import { Outlet } from 'react-router-dom'
 import Header from '../components/Header'
 import { useAuth } from '../context/AuthContext'
 import { useIsMobile } from '../hooks/useIsMobile'
 
 export default function Layout() {
   const { logout } = useAuth()
-  const location = useLocation()
   const isMobile = useIsMobile()
 
   return (

@@ -125,7 +125,6 @@ function CollectionLink({ id, name, color }: { id: string; name: string; color: 
 // ─── FileLayout ───────────────────────────────────────────────────────────────
 export default function FileLayout() {
   const navigate = useNavigate();
-  const location = useLocation();
   const isMobile = useIsMobile();
   const { collections } = useCollections();
   const { items: navItems } = useSidebarNav();

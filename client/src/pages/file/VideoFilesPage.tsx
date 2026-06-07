@@ -46,7 +46,6 @@ interface VideoFile {
 function VideoCard({ video, duration, onPlay }: { video: VideoFile; duration?: string; onPlay: () => void }) {
   const [hov, setHov] = useState(false);
   const initial = (video.uploader_name || "?")[0].toUpperCase();
-  const S = { fontSize: 11 }; // smaller text scale
 
   return (
     <div

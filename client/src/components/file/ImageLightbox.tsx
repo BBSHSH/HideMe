@@ -1,5 +1,4 @@
 import { useEffect, useCallback } from "react";
-import { C } from "../../theme/tokens";
 import { Icon } from "../Icon";
 
 interface ImageLightboxProps {

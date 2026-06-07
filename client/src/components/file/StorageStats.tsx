@@ -54,11 +54,7 @@ function InfoCard({
   );
 }
 
-interface StorageStatsProps {
-  onUploadClick?: () => void;
-}
-
-export default function StorageStats({ onUploadClick }: StorageStatsProps = {}) {
+export default function StorageStats() {
   const [totalFiles,  setTotalFiles]  = useState<number>(0);
   const [totalSizeB,  setTotalSizeB]  = useState<number>(0);
   const [collections, setCollections] = useState<number>(0);

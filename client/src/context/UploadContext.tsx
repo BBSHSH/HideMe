@@ -1,4 +1,5 @@
-import { createContext, useContext, useRef, useState, useCallback, ReactNode } from "react";
+import { createContext, useContext, useRef, useState, useCallback } from "react";
+import type { ReactNode } from "react";
 import { uploadFileInChunks } from "../api/chunkUpload";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
