@@ -215,34 +215,54 @@ export default function Editor() {
   // ─── ファイルがない場合 ───
 
   if (!file) {
+    const pickFile = () => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "video/*";
+      input.onchange = () => {
+        const f = input.files?.[0];
+        if (f) navigate("/editor", { state: { file: f, collectionId: state?.collectionId }, replace: true });
+      };
+      input.click();
+    };
+
     return (
-      <div
-        style={{
-          height: "calc(100vh - 72px)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexDirection: "column",
-          gap: 16,
-          color: C.outlineVariant,
-          fontFamily: F.family,
-        }}
-      >
-        <Icon name="movie" size={64} style={{ opacity: 0.3 }} />
-        <p>動画ファイルが選択されていません</p>
-        <button
-          onClick={handleBack}
+      <div style={{
+        height: "calc(100vh - 72px)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        flexDirection: "column", gap: 20,
+        fontFamily: F.family,
+      }}>
+        <div
+          onClick={pickFile}
           style={{
-            padding: "10px 24px",
-            borderRadius: 12,
-            border: "none",
-            background: C.primaryContainer,
-            color: C.onPrimaryContainer,
-            fontWeight: 700,
-            cursor: "pointer",
-            fontFamily: F.family,
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
+            padding: "48px 64px", borderRadius: 20, cursor: "pointer",
+            border: "2px dashed rgba(88,101,242,0.25)",
+            background: "rgba(88,101,242,0.04)",
+            transition: "all 0.2s",
+          }}
+          onMouseEnter={e => {
+            (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(88,101,242,0.5)";
+            (e.currentTarget as HTMLDivElement).style.background = "rgba(88,101,242,0.08)";
+          }}
+          onMouseLeave={e => {
+            (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(88,101,242,0.25)";
+            (e.currentTarget as HTMLDivElement).style.background = "rgba(88,101,242,0.04)";
           }}
         >
+          <Icon name="video_file" size={56} style={{ color: "rgba(88,101,242,0.5)" }} />
+          <div style={{ textAlign: "center" }}>
+            <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.onSurface }}>動画ファイルを選択</p>
+            <p style={{ margin: "6px 0 0", fontSize: 12, color: C.outlineVariant }}>クリックしてファイルを開く</p>
+          </div>
+        </div>
+        <button onClick={handleBack} style={{
+          padding: "8px 20px", borderRadius: 10,
+          border: `1px solid ${C.outlineVariant}44`,
+          background: "transparent", color: C.outlineVariant,
+          fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: F.family,
+        }}>
           戻る
         </button>
       </div>

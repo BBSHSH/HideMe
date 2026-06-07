@@ -15,7 +15,7 @@ import VideoCollectionRedirect from "./pages/file/VideoCollectionRedirect.tsx";
 
 import CollectionDetailPage from './pages/file/CollectionDetailPage'
 import VideoAssetsPage from './pages/file/VideoAssetsPage'
-import { RecentPage, FavoritesPage, CleanupPage } from './pages/file/PlaceholderPages'
+import { RecentPage, FavoritesPage, CleanupPage, ImagesPage, OthersPage } from './pages/file/PlaceholderPages'
 import Chat from './pages/Chat'
 import { useAuth } from './context/AuthContext'
 
@@ -49,6 +49,8 @@ function App() {
               <Route path="/file/videocollection/:id" element={<VideoCollectionRedirect />} />
               <Route path="/file/video/:fileId" element={<VideoAssetsPage />} />
               <Route path="collection/:id" element={<CollectionDetailPage />} />
+              <Route path="images" element={<ImagesPage />} />
+              <Route path="others" element={<OthersPage />} />
               <Route path="recent" element={<RecentPage />} />
               <Route path="favorites" element={<FavoritesPage />} />
               <Route path="cleanup" element={<CleanupPage />} />

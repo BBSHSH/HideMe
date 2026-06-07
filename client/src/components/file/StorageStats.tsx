@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { C, F } from "../../theme/tokens";
 import { Icon } from "../Icon";
+import { useIsMobile } from "../../hooks/useIsMobile";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -15,50 +16,54 @@ function getToken() {
   return JSON.parse(localStorage.getItem("hideme_auth") || "{}").token ?? "";
 }
 
-// ─── 統一カードスタイル（Dashboard と同じ） ───────────────
-const cardBase = {
-  flex: 1,
-  background: "rgba(88,101,242,0.06)",
-  border: "1px solid rgba(88,101,242,0.18)",
-  borderRadius: 12,
-  padding: "10px 14px",
-  display: "flex",
-  alignItems: "center",
-  gap: 12,
-} as const;
-
-function InfoCard({ icon, label, value, sub }: { icon: string; label: string; value: string; sub: string }) {
+function InfoCard({
+  icon, label, value, sub, color = C.primary,
+}: {
+  icon: string; label: string; value: string; sub: string; color?: string;
+}) {
   return (
-    <div style={cardBase}>
+    <div style={{
+      flex: 1,
+      background: `${color}0d`,
+      border: `1px solid ${color}28`,
+      borderRadius: 14,
+      padding: "14px 16px",
+      display: "flex", alignItems: "center", gap: 12,
+      minWidth: 0,
+    }}>
       <div style={{
-        width: 34, height: 34, borderRadius: 9, flexShrink: 0,
-        background: "rgba(88,101,242,0.15)",
+        width: 38, height: 38, borderRadius: 10, flexShrink: 0,
+        background: `${color}1a`,
         display: "flex", alignItems: "center", justifyContent: "center",
       }}>
-        <Icon name={icon} size={17} style={{ color: C.primary }} />
+        <Icon name={icon} size={19} style={{ color }} />
       </div>
-      <div>
-        <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: "#454655",
-          textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</p>
-        <p style={{ margin: "1px 0 0", fontSize: 16, fontWeight: 800, color: "#e3e1ed",
-          letterSpacing: "-0.02em", fontFamily: F.family }}>{value}</p>
-        <p style={{ margin: 0, fontSize: 10, color: C.outline }}>{sub}</p>
+      <div style={{ minWidth: 0 }}>
+        <p style={{
+          margin: 0, fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.35)",
+          textTransform: "uppercase", letterSpacing: "0.08em",
+        }}>{label}</p>
+        <p style={{
+          margin: "3px 0 1px", fontSize: 18, fontWeight: 900,
+          color: C.onSurface, letterSpacing: "-0.03em", fontFamily: F.family,
+          lineHeight: 1,
+        }}>{value}</p>
+        <p style={{ margin: 0, fontSize: 10, color: "rgba(255,255,255,0.35)" }}>{sub}</p>
       </div>
     </div>
   );
 }
 
-// ─── Props ───────────────────────────────────────────────
 interface StorageStatsProps {
   onUploadClick?: () => void;
 }
 
 export default function StorageStats({ onUploadClick }: StorageStatsProps = {}) {
-  const [totalFiles,   setTotalFiles]   = useState<number>(0);
-  const [totalSizeB,   setTotalSizeB]   = useState<number>(0);
-  const [collections,  setCollections]  = useState<number>(0);
-  const [loading,      setLoading]      = useState(true);
-  const [btnHover,     setBtnHover]     = useState(false);
+  const [totalFiles,  setTotalFiles]  = useState<number>(0);
+  const [totalSizeB,  setTotalSizeB]  = useState<number>(0);
+  const [collections, setCollections] = useState<number>(0);
+  const [loading,     setLoading]     = useState(true);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     Promise.all([
@@ -79,48 +84,35 @@ export default function StorageStats({ onUploadClick }: StorageStatsProps = {}) 
   const dash = loading ? "—" : undefined;
 
   return (
-    <div style={{ display: "flex", alignItems: "stretch", gap: 14 }}>
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3, 1fr)",
+      gap: isMobile ? 10 : 12,
+    }}>
       <InfoCard
         icon="storage"
         label="使用ストレージ"
         value={dash ?? formatBytes(totalSizeB)}
         sub={dash ?? `${totalFiles.toLocaleString()} ファイル`}
+        color="#5865f2"
       />
       <InfoCard
-        icon="folder_open"
+        icon="insert_drive_file"
         label="総ファイル数"
         value={dash ?? totalFiles.toLocaleString()}
         sub={dash ?? formatBytes(totalSizeB)}
+        color="#34d399"
       />
-      <InfoCard
-        icon="collections"
-        label="コレクション数"
-        value={dash ?? String(collections)}
-        sub={dash ?? `${totalFiles.toLocaleString()} ファイル · ${formatBytes(totalSizeB)}`}
-      />
-
-      {/* アップロードボタン */}
-      {onUploadClick && (
-        <button
-          onClick={onUploadClick}
-          onMouseEnter={() => setBtnHover(true)}
-          onMouseLeave={() => setBtnHover(false)}
-          style={{
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
-            padding: "10px 18px",
-            borderRadius: 12,
-            border: `1px solid rgba(88,101,242,${btnHover ? "0.5" : "0.3"})`,
-            background: btnHover ? "rgba(88,101,242,0.2)" : "rgba(88,101,242,0.08)",
-            color: btnHover ? "#bec2ff" : C.primary,
-            fontWeight: 700, fontSize: 13,
-            cursor: "pointer", transition: "all 0.2s",
-            fontFamily: F.family, whiteSpace: "nowrap",
-          }}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>upload</span>
-          アップロード
-        </button>
-      )}
+      {/* モバイルで3つ目は2列分 */}
+      <div style={{ gridColumn: isMobile ? "1 / -1" : undefined, display: "flex" }}>
+        <InfoCard
+          icon="collections_bookmark"
+          label="コレクション"
+          value={dash ?? String(collections)}
+          sub={dash ?? `${totalFiles} ファイル`}
+          color="#f472b6"
+        />
+      </div>
     </div>
   );
 }

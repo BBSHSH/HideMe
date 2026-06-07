@@ -11,6 +11,11 @@ import { useAuth } from "../../context/AuthContext";
 import { deleteCollectionFile } from "../../api/collections";
 import { getDownloadUrl } from "../../api/files";
 import { formatBytes, formatRelativeTime } from "../../utils/format";
+import ImageLightbox from "./ImageLightbox";
+
+function isImage(name: string) {
+  return IMAGE_EXTS.some((e) => name.toLowerCase().endsWith(e));
+}
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -48,6 +53,7 @@ export default function FileListPanel({ collectionId, refreshKey }: FileListPane
   const [files, setFiles] = useState<FileRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]   = useState<string | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const fetchFiles = useCallback(async () => {
     setLoading(true);
@@ -125,15 +131,21 @@ export default function FileListPanel({ collectionId, refreshKey }: FileListPane
     </div>
   );
 
+  const imageFiles = files.filter((f) => isImage(f.file_name));
+  const lightboxFile = lightboxIndex !== null ? imageFiles[lightboxIndex] : null;
+  const lightboxSrc = lightboxFile
+    ? `${BASE_URL}/v1/files/${encodeURIComponent(lightboxFile.file_name)}`
+    : "";
+
   return (
+    <>
     <div style={{ ...glassPanel, overflow: "hidden", borderRadius: 16 }}>
       {files.map((file, index) => {
         const { icon, color } = fileIcon(file.file_name);
-        // uploaded_by が空のレコードは admin のみ削除可能
-        // uploaded_by が設定されている場合は admin または本人
         const canDelete = user?.role === "admin"
           || (!!file.uploaded_by && !!user?.userId && user.userId === file.uploaded_by);
         const colLabel = !collectionId && file.collection_name ? ` • ${file.collection_name}` : "";
+        const imgIdx = isImage(file.file_name) ? imageFiles.findIndex((i) => i.id === file.id) : -1;
 
         return (
           <div key={file.id ?? `${file.file_name}-${index}`}>
@@ -150,7 +162,11 @@ export default function FileListPanel({ collectionId, refreshKey }: FileListPane
               }}
             >
               {/* 左: アイコン + ファイル名・メタ */}
-              <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
+              <div
+                style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0, flex: 1,
+                  cursor: imgIdx >= 0 ? "pointer" : "default" }}
+                onClick={() => { if (imgIdx >= 0) setLightboxIndex(imgIdx); }}
+              >
                 <div
                   style={{
                     width: 44,
@@ -235,5 +251,18 @@ export default function FileListPanel({ collectionId, refreshKey }: FileListPane
         );
       })}
     </div>
+
+    {lightboxFile && (
+      <ImageLightbox
+        src={lightboxSrc}
+        name={lightboxFile.file_name}
+        onClose={() => setLightboxIndex(null)}
+        hasPrev={lightboxIndex! > 0}
+        hasNext={lightboxIndex! < imageFiles.length - 1}
+        onPrev={() => setLightboxIndex((i) => (i ?? 1) - 1)}
+        onNext={() => setLightboxIndex((i) => (i ?? 0) + 1)}
+      />
+    )}
+    </>
   );
 }

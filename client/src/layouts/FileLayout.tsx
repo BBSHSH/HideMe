@@ -1,23 +1,31 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { C, F } from "../theme/tokens";
 import { Icon } from "../components/Icon";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { useCollections } from "../hooks/useFiles";
+import UploadModal from "../components/file/UploadModal";
+import { useSidebarNav } from "../hooks/useSidebarNav";
 
-// ─── サイドバーのタブ定義 ──────────────────────────────────────────────────
-const NAV_ITEMS = [
-  { icon: "grid_view",   label: "すべて",       to: "/file" },
-  { icon: "movie",       label: "動画",          to: "/file/videos" },
-  { icon: "schedule",    label: "最近の項目",    to: "/file/recent" },
-  { icon: "favorite",    label: "お気に入り",    to: "/file/favorites" },
-  { icon: "auto_delete", label: "Cleanup",       to: "/file/cleanup" },
-] as const;
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
-const FILTER_DOTS = [
-  { color: C.primary,   label: "Gaming" },
-  { color: C.tertiary,  label: "Personal" },
-  { color: C.secondary, label: "Work" },
-] as const;
+function getToken() {
+  return JSON.parse(localStorage.getItem("hideme_auth") || "{}").token ?? "";
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+const VIDEO_EXTS = [".mp4", ".webm", ".mov", ".mkv", ".avi", ".flv", ".wmv"];
+
+// ストレージ上限フォールバック（StatVFS が使えない環境用）
+const STORAGE_MAX_FALLBACK = 1 * 1024 * 1024 * 1024 * 1024; // 1 TB
+
+
 
 // ─── SidebarLink ─────────────────────────────────────────────────────────────
 function SidebarLink({
@@ -69,32 +77,48 @@ function SidebarLink({
   );
 }
 
-// ─── FilterDot ───────────────────────────────────────────────────────────────
-function FilterDot({ color, label }: { color: string; label: string }) {
+
+// ─── CollectionLink ──────────────────────────────────────────────────────────
+function CollectionLink({ id, name, color }: { id: string; name: string; color: string }) {
+  const [hover, setHover] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isActive = location.pathname === `/file/collection/${id}`;
+
   return (
-    <div
+    <button
+      onClick={() => navigate(`/file/collection/${id}`)}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
       style={{
-        display:     "flex",
-        alignItems:  "center",
-        gap:         16,
-        color:       C.onSurfaceVariant,
-        padding:     "6px 0",
-        cursor:      "pointer",
-        fontSize:    16,
-        lineHeight:  1.5,
+        display:        "flex",
+        alignItems:     "center",
+        gap:            12,
+        padding:        "9px 12px",
+        borderRadius:   10,
+        background:     isActive ? `${color}1a` : hover ? `${C.surfaceVariant}4d` : "transparent",
+        border:         "none",
+        color:          isActive ? color : C.onSurfaceVariant,
+        fontFamily:     F.family,
+        fontSize:       14,
+        fontWeight:     isActive ? 700 : 500,
+        textAlign:      "left",
+        cursor:         "pointer",
+        transition:     "all 0.15s",
+        width:          "100%",
       }}
     >
-      <span
-        style={{
-          width:        12,
-          height:       12,
-          borderRadius: 9999,
-          background:   color,
-          flexShrink:   0,
-        }}
-      />
-      {label}
-    </div>
+      <span style={{
+        width:        10, height: 10,
+        borderRadius: 9999,
+        background:   color || C.primary,
+        flexShrink:   0,
+        boxShadow:    isActive ? `0 0 6px ${color}99` : "none",
+      }} />
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {name}
+      </span>
+    </button>
   );
 }
 
@@ -103,13 +127,51 @@ export default function FileLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const isMobile = useIsMobile();
+  const { collections } = useCollections();
+  const { items: navItems } = useSidebarNav();
+  const enabledNav = navItems.filter((i) => i.enabled);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showUpload,  setShowUpload]  = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+
+  // ストレージ使用量
+  const [totalSizeB,    setTotalSizeB]    = useState(0);
+  const [totalFiles,    setTotalFiles]    = useState(0);
+  const [storageTotalB, setStorageTotalB] = useState(0);
+  const [storageUsedB,  setStorageUsedB]  = useState(0);
+  useEffect(() => {
+    fetch(`${BASE_URL}/v1/stats`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        setTotalSizeB(d?.total_size_bytes ?? 0);
+        setTotalFiles(d?.total_files ?? 0);
+        setStorageTotalB(d?.storage_total_bytes ?? 0);
+        setStorageUsedB(d?.storage_used_bytes ?? 0);
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    const isVideo = VIDEO_EXTS.some(ext => f.name.toLowerCase().endsWith(ext)) || f.type.startsWith("video/");
+    if (isVideo) {
+      navigate("/editor", { state: { file: f } });
+    } else {
+      setPendingFile(f);
+      setShowUpload(true);
+    }
+  };
 
   return (
     <div
       style={{
         display:         "flex",
         flexDirection:   isMobile ? "column" : "row",
-        height:          "calc(100vh - 80px)",
+        height:          isMobile ? "calc(100vh - 56px)" : "calc(100vh - 72px)",
         fontFamily:      F.family,
         background:      C.background,
         backgroundImage: "radial-gradient(circle at 2px 2px, rgba(88,101,242,0.05) 1px, transparent 0)",
@@ -128,7 +190,7 @@ export default function FileLayout() {
           borderBottom: `1px solid ${C.outlineVariant}33`,
           scrollbarWidth: "none",
         }}>
-          {NAV_ITEMS.map((item) => (
+          {enabledNav.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -190,62 +252,123 @@ export default function FileLayout() {
               Main View
             </p>
 
-            {NAV_ITEMS.map((item) => (
+            {enabledNav.map((item) => (
               <SidebarLink key={item.to} {...item} />
             ))}
 
             <p
               style={{
-                margin:        "64px 0 16px",
-                fontSize:      14,
-                fontWeight:    600,
+                margin:        "40px 0 12px",
+                fontSize:      11,
+                fontWeight:    700,
                 color:         C.outlineVariant,
                 textTransform: "uppercase",
-                letterSpacing: "0.1em",
+                letterSpacing: "0.12em",
                 padding:       "0 20px",
               }}
             >
-              Filters
+              Collections
             </p>
             <div
               style={{
                 display:       "flex",
                 flexDirection: "column",
-                gap:           8,
-                padding:       "0 20px",
+                gap:           2,
+                padding:       "0 8px",
               }}
             >
-              {FILTER_DOTS.map((f) => (
-                <FilterDot key={f.label} {...f} />
-              ))}
+              {collections.length === 0 ? (
+                <p style={{ margin: 0, padding: "6px 12px", fontSize: 13, color: C.outlineVariant, fontStyle: "italic" }}>
+                  コレクションなし
+                </p>
+              ) : (
+                collections.map((col) => (
+                  <CollectionLink
+                    key={col.ID}
+                    id={col.ID}
+                    name={col.Name}
+                    color={col.Color || C.primary}
+                  />
+                ))
+              )}
             </div>
           </nav>
 
-          <div
-            style={{ padding: "0 20px", marginTop: "auto", paddingBottom: 64 }}
-          >
+          {/* ── ストレージ使用量 + アップロードボタン ── */}
+          <div style={{ padding: "0 16px", marginTop: "auto", paddingBottom: 24, display: "flex", flexDirection: "column", gap: 10 }}>
+            {/* ストレージ情報 */}
+            {(() => {
+              // NASからディスク容量が取れた場合はそれを使い、なければフォールバック
+              const usedB  = storageTotalB > 0 ? storageUsedB  : totalSizeB;
+              const totalB = storageTotalB > 0 ? storageTotalB : STORAGE_MAX_FALLBACK;
+              const pct = Math.min(100, Math.round((usedB / totalB) * 100));
+              const barColor = pct >= 90 ? "#f87171" : pct >= 70 ? "#fbbf24" : C.primary;
+              return (
+                <div style={{
+                  background: `${C.surfaceVariant}55`,
+                  border: `1px solid ${C.outlineVariant}22`,
+                  borderRadius: 14,
+                  padding: "12px 14px",
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <Icon name="storage" size={14} style={{ color: C.outlineVariant }} />
+                      <span style={{ fontSize: 11, fontWeight: 700, color: C.outlineVariant, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                        Storage
+                      </span>
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: barColor }}>
+                      {pct}%
+                    </span>
+                  </div>
+                  <div style={{ height: 5, background: `${C.surfaceContainerLow}`, borderRadius: 9999, overflow: "hidden" }}>
+                    <div style={{
+                      height: "100%",
+                      width: `${Math.max(pct, pct > 0 ? 2 : 0)}%`,
+                      background: barColor,
+                      borderRadius: 9999,
+                      transition: "width 0.5s ease",
+                      boxShadow: `0 0 8px ${barColor}88`,
+                    }} />
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+                    <span style={{ fontSize: 10, color: C.outlineVariant }}>{formatBytes(usedB)} 使用中</span>
+                    <span style={{ fontSize: 10, color: C.outlineVariant }}>{formatBytes(totalB)}</span>
+                  </div>
+                  <p style={{ margin: "6px 0 0", fontSize: 10, color: C.outlineVariant }}>
+                    {totalFiles.toLocaleString()} ファイル
+                  </p>
+                </div>
+              );
+            })()}
+
+            {/* アップロードボタン */}
+            <input ref={fileInputRef} type="file" style={{ display: "none" }} onChange={handleFileSelect} />
             <button
-              onClick={() => navigate("/settings")}
+              onClick={() => fileInputRef.current?.click()}
               style={{
                 width:          "100%",
-                background:     C.surfaceVariant,
-                border:         `1px solid ${C.outlineVariant}4d`,
-                color:          C.onSurface,
+                background:     "linear-gradient(135deg, #5865f2, #7c3aed)",
+                border:         "none",
+                color:          "#fff",
                 fontWeight:     700,
-                fontSize:       16,
-                padding:        "16px 0",
-                borderRadius:   24,
+                fontSize:       14,
+                padding:        "12px 0",
+                borderRadius:   12,
                 display:        "flex",
                 alignItems:     "center",
                 justifyContent: "center",
                 gap:            8,
                 cursor:         "pointer",
                 fontFamily:     "inherit",
-                transition:     "background 0.2s",
+                boxShadow:      "0 2px 16px rgba(88,101,242,0.4)",
+                transition:     "opacity 0.2s",
               }}
+              onMouseEnter={e => (e.currentTarget.style.opacity = "0.85")}
+              onMouseLeave={e => (e.currentTarget.style.opacity = "1")}
             >
-              <Icon name="settings" />
-              Storage Settings
+              <Icon name="upload" size={18} />
+              アップロード
             </button>
           </div>
         </aside>
@@ -261,16 +384,17 @@ export default function FileLayout() {
           minHeight: 0,
         }}
       >
-        <div
-          key={location.pathname}
-          style={{
-            flex: 1, minHeight: 0, display: "flex", flexDirection: "column",
-            animation: "pageIn 0.22s cubic-bezier(0.4,0,0.2,1) both",
-          }}
-        >
-          <Outlet />
-        </div>
+        <Outlet />
       </main>
+
+      {/* ── アップロードモーダル ── */}
+      {showUpload && (
+        <UploadModal
+          initialFile={pendingFile ?? undefined}
+          onClose={() => { setShowUpload(false); setPendingFile(null); }}
+          onUploaded={() => { setShowUpload(false); setPendingFile(null); }}
+        />
+      )}
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap');
@@ -288,8 +412,8 @@ export default function FileLayout() {
           50%       { opacity: 0.8; transform: scale(1.02); }
         }
         @keyframes pageIn {
-          0%   { opacity: 0; transform: translateY(10px); }
-          100% { opacity: 1; transform: translateY(0); }
+          0%   { opacity: 0; transform: scale(0.98) translateY(4px); filter: blur(2px); }
+          100% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0px); }
         }
       `}</style>
     </div>

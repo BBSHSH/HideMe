@@ -12,12 +12,13 @@ interface Collection {
 interface UploadModalProps {
   onClose: () => void;
   onUploaded?: () => void;
+  initialFile?: File;
 }
 
-export default function UploadModal({ onClose, onUploaded }: UploadModalProps) {
+export default function UploadModal({ onClose, onUploaded, initialFile }: UploadModalProps) {
   const [collections, setCollections] = useState<Collection[]>([]);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [fileName, setFileName]         = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(initialFile ?? null);
+  const [fileName, setFileName]         = useState(initialFile?.name ?? "");
   const [collectionId, setCollectionId] = useState("");
   const [progress, setProgress]         = useState<number | null>(null);
   const [error, setError]               = useState<string | null>(null);

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { C, F } from "../theme/tokens";
 import { Icon } from "../components/Icon";
+import appIcon from "../assets/icon.png";
 import { useLogin } from "../hooks/useAuth";
 import { getAuthSettings, getDiscordLoginURL, type AuthSettings } from "../api/auth";
 
@@ -85,16 +86,15 @@ export default function Login() {
         >
           <div
             style={{
-              width: 56,
-              height: 56,
-              borderRadius: 16,
-              background: C.primaryContainer,
+              width: 64,
+              height: 64,
+              borderRadius: 18,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <Icon name="lock" size={28} style={{ color: C.onPrimaryContainer }} />
+            <img src={appIcon} style={{ width: 64, height: 64, objectFit: "contain" }} />
           </div>
           <h1
             style={{

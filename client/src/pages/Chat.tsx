@@ -569,7 +569,7 @@ export default function Chat() {
   };
 
   return (
-    <div style={{ height: "calc(100vh - 72px)", display: "flex", overflow: "hidden",
+    <div style={{ height: isMobile ? "calc(100vh - 56px)" : "calc(100vh - 72px)", display: "flex", overflow: "hidden",
       fontFamily: F.family, background: C.background }}>
 
       <audio ref={remoteAudioRef} autoPlay />

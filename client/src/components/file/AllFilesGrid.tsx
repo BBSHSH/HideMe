@@ -9,6 +9,7 @@ import { getDownloadUrl } from "../../api/files";
 import { formatBytes, formatRelativeTime } from "../../utils/format";
 import { useAuth } from "../../context/AuthContext";
 import { deleteCollectionFile } from "../../api/collections";
+import ImageLightbox from "./ImageLightbox";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -43,7 +44,7 @@ interface FileItem {
   collection_name: string;
 }
 
-function FileCard({ file, onDelete }: { file: FileItem; onDelete?: () => void }) {
+function FileCard({ file, onDelete, onImageClick }: { file: FileItem; onDelete?: () => void; onImageClick?: () => void }) {
   const [hovered, setHovered] = useState(false);
   const { icon, color } = fileIcon(file.file_name);
   const imgSrc = file.thumbnail_name
@@ -68,7 +69,13 @@ function FileCard({ file, onDelete }: { file: FileItem; onDelete?: () => void })
         transition: "all 0.2s",
         cursor: "pointer",
       }}
-      onClick={() => window.open(getDownloadUrl(file.file_name), "_blank")}
+      onClick={() => {
+        if (isImage(file.file_name) && onImageClick) {
+          onImageClick();
+        } else {
+          window.open(getDownloadUrl(file.file_name), "_blank");
+        }
+      }}
     >
       {/* サムネイル / アイコン */}
       <div
@@ -153,8 +160,15 @@ export default function AllFilesGrid() {
   const [loading, setLoading] = useState(true);
   const [canLeft, setCanLeft] = useState(false);
   const [canRight, setCanRight] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
+
+  const imageFiles = files.filter((f) => isImage(f.file_name));
+  const lightboxFile = lightboxIndex !== null ? imageFiles[lightboxIndex] : null;
+  const lightboxSrc = lightboxFile
+    ? `${BASE_URL}/v1/files/${encodeURIComponent(lightboxFile.file_name)}`
+    : "";
 
   const handleDelete = async (file: FileItem) => {
     if (!confirm("このファイルを削除しますか？")) return;
@@ -225,6 +239,7 @@ export default function AllFilesGrid() {
   if (files.length === 0) return <div style={{ padding: 32, textAlign: "center", color: C.outlineVariant }}>ファイルはまだありません</div>;
 
   return (
+    <>
     <div style={{ position: "relative" }}>
       <style>{`.af-hscroll::-webkit-scrollbar{display:none}.af-hscroll{-ms-overflow-style:none;scrollbar-width:none}`}</style>
       {arrowBtn("left", canLeft)}
@@ -233,15 +248,19 @@ export default function AllFilesGrid() {
         className="af-hscroll"
         style={{ display: "flex", gap: GAP, overflowX: "auto", overflowY: "visible", paddingBottom: 4, paddingTop: 2 }}
       >
-        {files.map((f) => (
-          <FileCard
-            key={f.id}
-            file={f}
-            onDelete={(user?.role === "admin" || user?.userId === f.uploaded_by)
-              ? () => handleDelete(f)
-              : undefined}
-          />
-        ))}
+        {files.map((f) => {
+          const imgIdx = isImage(f.file_name) ? imageFiles.findIndex((i) => i.id === f.id) : -1;
+          return (
+            <FileCard
+              key={f.id}
+              file={f}
+              onDelete={(user?.role === "admin" || user?.userId === f.uploaded_by)
+                ? () => handleDelete(f)
+                : undefined}
+              onImageClick={imgIdx >= 0 ? () => setLightboxIndex(imgIdx) : undefined}
+            />
+          );
+        })}
       </div>
       {canRight && (
         <div style={{
@@ -253,5 +272,18 @@ export default function AllFilesGrid() {
       )}
       {arrowBtn("right", canRight)}
     </div>
+
+    {lightboxFile && (
+      <ImageLightbox
+        src={lightboxSrc}
+        name={lightboxFile.file_name}
+        onClose={() => setLightboxIndex(null)}
+        hasPrev={lightboxIndex! > 0}
+        hasNext={lightboxIndex! < imageFiles.length - 1}
+        onPrev={() => setLightboxIndex((i) => (i ?? 1) - 1)}
+        onNext={() => setLightboxIndex((i) => (i ?? 0) + 1)}
+      />
+    )}
+    </>
   );
 }

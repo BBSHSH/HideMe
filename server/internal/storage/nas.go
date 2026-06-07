@@ -208,6 +208,39 @@ func (s *NASStorage) Open(ctx context.Context, name string) (io.ReadCloser, File
 		}, nil
 }
 
+// DiskStat は NAS のディスク使用量・空き容量・合計容量を返す。
+// StatVFS に対応していない NAS の場合はエラーを返す。
+type DiskStat struct {
+	TotalBytes uint64
+	FreeBytes  uint64
+	UsedBytes  uint64
+}
+
+func (s *NASStorage) DiskStat(ctx context.Context) (DiskStat, error) {
+	client, sshClient, err := s.connect(ctx)
+	if err != nil {
+		return DiskStat{}, err
+	}
+	defer func() {
+		_ = client.Close()
+		_ = sshClient.Close()
+	}()
+
+	vfs, err := client.StatVFS(s.cfg.Share)
+	if err != nil {
+		return DiskStat{}, fmt.Errorf("StatVFS: %w", err)
+	}
+
+	total := vfs.TotalSpace()
+	free := vfs.FreeSpace()
+	used := total - free
+	return DiskStat{
+		TotalBytes: total,
+		FreeBytes:  free,
+		UsedBytes:  used,
+	}, nil
+}
+
 func (s *NASStorage) uploadPath(name string) string {
 	sub := CleanSubPath(name)
 	return path.Join(s.cfg.Share, sub)

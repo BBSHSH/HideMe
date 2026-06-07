@@ -1,10 +1,12 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import Header from '../components/Header'
 import { useAuth } from '../context/AuthContext'
+import { useIsMobile } from '../hooks/useIsMobile'
 
 export default function Layout() {
   const { logout } = useAuth()
   const location = useLocation()
+  const isMobile = useIsMobile()
 
   return (
     <div className="min-h-screen bg-[#12131b] text-white">
@@ -44,18 +46,15 @@ export default function Layout() {
         }
         .animate-pulse { animation: pulse 2s cubic-bezier(0.4,0,0.6,1) infinite; }
         @keyframes pageIn {
-          0%   { opacity: 0; transform: translateY(10px); }
-          100% { opacity: 1; transform: translateY(0); }
+          0%   { opacity: 0; transform: scale(0.98) translateY(4px); filter: blur(2px); }
+          100% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0px); }
         }
       `}</style>
 
       <Header onLogout={logout} />
 
-      {/* Header height: 72px を paddingTop で確保 */}
-      <main style={{ paddingTop: 72 }}>
-        <div key={location.pathname} style={{ animation: "pageIn 0.22s cubic-bezier(0.4,0,0.2,1) both" }}>
-          <Outlet />
-        </div>
+      <main style={{ paddingTop: isMobile ? 56 : 72 }}>
+        <Outlet />
       </main>
     </div>
   )

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { F } from "../theme/tokens";
 import { Icon } from "../components/Icon";
@@ -6,6 +6,7 @@ import { useTheme, useColors } from "../context/ThemeContext";
 import { useSettings } from "../context/SettingsContext";
 import { useAuth } from "../context/AuthContext";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { useSidebarNav } from "../hooks/useSidebarNav";
 
 // ─── Toggle ────────────────────────────────────────────────
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
@@ -33,11 +34,13 @@ function Seg<T extends string | number>({
   options, value, onChange,
 }: { options: { label: string; value: T }[]; value: T; onChange: (v: T) => void }) {
   const C = useColors();
+  const isMobile = useIsMobile();
   return (
-    <div style={{ display: "flex", background: C.surfaceVariant, borderRadius: 10, padding: 3, gap: 2 }}>
+    <div style={{ display: "flex", width: isMobile ? "100%" : "auto", background: C.surfaceVariant, borderRadius: 10, padding: 3, gap: 2 }}>
       {options.map((o) => (
         <button key={String(o.value)} onClick={() => onChange(o.value)} style={{
-          padding: "5px 12px", borderRadius: 7, border: "none",
+          flex: isMobile ? 1 : "none",
+          padding: "7px 12px", borderRadius: 7, border: "none",
           background: value === o.value ? C.primaryContainer : "transparent",
           color: value === o.value ? C.onPrimaryContainer : C.outline,
           fontSize: 12, fontWeight: 700, cursor: "pointer",
@@ -49,14 +52,20 @@ function Seg<T extends string | number>({
 }
 
 // ─── SettingItem ───────────────────────────────────────────
-function SettingItem({ icon, label, desc, children, accent = false }: {
-  icon: string; label: string; desc?: string; children: React.ReactNode; accent?: boolean;
+function SettingItem({ icon, label, desc, children, accent = false, stack = false }: {
+  icon: string; label: string; desc?: string; children: React.ReactNode; accent?: boolean; stack?: boolean;
 }) {
   const C = useColors();
+  const isMobile = useIsMobile();
+  const vertical = stack || isMobile;
   return (
     <div style={{
-      display: "flex", alignItems: "center", justifyContent: "space-between",
-      gap: 12, padding: "14px 0",
+      display: "flex",
+      flexDirection: vertical ? "column" : "row",
+      alignItems: vertical ? "flex-start" : "center",
+      justifyContent: vertical ? "flex-start" : "space-between",
+      gap: vertical ? 10 : 12,
+      padding: "14px 0",
       borderBottom: `1px solid ${C.outlineVariant}22`,
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
@@ -72,7 +81,7 @@ function SettingItem({ icon, label, desc, children, accent = false }: {
           {desc && <p style={{ margin: "1px 0 0", fontSize: 11, color: C.outline }}>{desc}</p>}
         </div>
       </div>
-      <div style={{ flexShrink: 0 }}>{children}</div>
+      <div style={{ flexShrink: 0, width: vertical ? "100%" : "auto" }}>{children}</div>
     </div>
   );
 }
@@ -179,6 +188,7 @@ function AccountCard() {
   const C = useColors();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [confirm, setConfirm] = useState(false);
   return (
     <div style={{
@@ -186,7 +196,10 @@ function AccountCard() {
       border: `1px solid ${C.outlineVariant}33`,
       borderRadius: 20,
       padding: "20px",
-      display: "flex", alignItems: "center", gap: 16,
+      display: "flex",
+      flexDirection: isMobile ? "column" : "row",
+      alignItems: isMobile ? "flex-start" : "center",
+      gap: 16,
     }}>
       <div style={{
         width: 56, height: 56, borderRadius: "50%", flexShrink: 0,
@@ -217,32 +230,100 @@ function AccountCard() {
         </div>
       </div>
       {confirm ? (
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", gap: 6, width: isMobile ? "100%" : "auto" }}>
           <button onClick={() => setConfirm(false)} style={{
-            padding: "6px 12px", borderRadius: 8, border: `1px solid ${C.outlineVariant}44`,
-            background: "transparent", color: C.outline, fontSize: 12, fontWeight: 700,
+            flex: isMobile ? 1 : "none",
+            padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.outlineVariant}44`,
+            background: "transparent", color: C.outline, fontSize: 13, fontWeight: 700,
             cursor: "pointer", fontFamily: F.family,
           }}>キャンセル</button>
           <button onClick={() => { logout(); navigate("/login"); }} style={{
-            padding: "6px 12px", borderRadius: 8,
+            flex: isMobile ? 1 : "none",
+            padding: "8px 12px", borderRadius: 8,
             border: "1px solid rgba(248,113,113,0.4)",
             background: "rgba(248,113,113,0.12)", color: "#f87171",
-            fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: F.family,
+            fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: F.family,
           }}>ログアウト</button>
         </div>
       ) : (
         <button onClick={() => setConfirm(true)} style={{
-          padding: "8px 16px", borderRadius: 10,
+          width: isMobile ? "100%" : "auto",
+          padding: "10px 16px", borderRadius: 10,
           border: `1px solid ${C.outlineVariant}44`,
           background: C.surfaceVariant, color: C.onSurfaceVariant,
           fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: F.family,
-          display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 6, flexShrink: 0,
         }}>
           <Icon name="logout" size={16} />
           ログアウト
         </button>
       )}
     </div>
+  );
+}
+
+// ─── サイドバーナビ設定 ────────────────────────────────────
+function SidebarNavCard() {
+  const C = useColors();
+  const { items, setEnabled, reorder, reset } = useSidebarNav();
+  const dragIndex = useRef<number | null>(null);
+
+  const handleDragStart = (index: number) => {
+    dragIndex.current = index;
+  };
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (dragIndex.current === null || dragIndex.current === index) return;
+    reorder(dragIndex.current, index);
+    dragIndex.current = index;
+  };
+  const handleDragEnd = () => { dragIndex.current = null; };
+
+  return (
+    <Card icon="list" title="サイドバーナビ" color="#34d399">
+      <div style={{ paddingTop: 8, paddingBottom: 4, display: "flex", flexDirection: "column", gap: 2 }}>
+        <p style={{ margin: "0 0 10px", fontSize: 11, color: C.outline, fontWeight: 600 }}>
+          ドラッグで並び替え・トグルで表示切替
+        </p>
+        {items.map((item, i) => (
+          <div
+            key={item.id}
+            draggable
+            onDragStart={() => handleDragStart(i)}
+            onDragOver={(e) => handleDragOver(e, i)}
+            onDragEnd={handleDragEnd}
+            style={{
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "8px 10px", borderRadius: 10,
+              background: item.enabled ? `${C.primary}0d` : C.surfaceVariant + "55",
+              border: `1px solid ${item.enabled ? C.primary + "22" : C.outlineVariant + "22"}`,
+              cursor: "grab", userSelect: "none",
+              transition: "background 0.15s",
+              opacity: item.enabled ? 1 : 0.5,
+            }}
+          >
+            <Icon name="drag_indicator" size={16} style={{ color: C.outlineVariant, flexShrink: 0 }} />
+            <Icon name={item.icon} size={16} style={{ color: item.enabled ? C.primary : C.outlineVariant, flexShrink: 0 }} />
+            <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: item.enabled ? C.onSurface : C.outline }}>
+              {item.label}
+            </span>
+            <Toggle checked={item.enabled} onChange={(v) => setEnabled(item.id, v)} />
+          </div>
+        ))}
+        <button
+          onClick={reset}
+          style={{
+            marginTop: 8, padding: "6px 12px", borderRadius: 8,
+            border: `1px solid ${C.outlineVariant}44`,
+            background: "transparent", color: C.outline,
+            fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: F.family,
+            alignSelf: "flex-end",
+          }}
+        >
+          デフォルトに戻す
+        </button>
+      </div>
+    </Card>
   );
 }
 
@@ -314,7 +395,7 @@ export default function Settings() {
 
         {/* 表示設定 */}
         <Card icon="grid_view" title="表示設定" color="#34d399">
-          <SettingItem icon="crop_square" label="コレクションカードサイズ" desc="コレクション一覧のカードの大きさ">
+          <SettingItem icon="crop_square" label="コレクションカードサイズ" desc="コレクション一覧のカードの大きさ" stack>
             <Seg
               options={[{ label: "小", value: "small" }, { label: "中", value: "medium" }, { label: "大", value: "large" }]}
               value={settings.collectionCardSize}
@@ -326,7 +407,7 @@ export default function Settings() {
         {/* プレイヤー＋アップロード */}
         <Card icon="play_circle" title="プレイヤー・アップロード" color="#f472b6">
           <div style={{ paddingTop: 14, paddingBottom: 8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, flexWrap: "wrap", gap: 4 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{
                   width: 34, height: 34, borderRadius: 9,
@@ -349,7 +430,7 @@ export default function Settings() {
               <span>ミュート</span><span>100%</span><span>200%</span>
             </div>
           </div>
-          <SettingItem icon="hd" label="デフォルト解像度" desc="エディターの初期解像度">
+          <SettingItem icon="hd" label="デフォルト解像度" desc="エディターの初期解像度" stack>
             <Seg
               options={[
                 { label: "1080p", value: "1080p" },
@@ -361,7 +442,7 @@ export default function Settings() {
               onChange={(v) => update("defaultResolution", v as any)}
             />
           </SettingItem>
-          <SettingItem icon="speed" label="デフォルトFPS" desc="エディターの初期フレームレート">
+          <SettingItem icon="speed" label="デフォルトFPS" desc="エディターの初期フレームレート" stack>
             <Seg
               options={[
                 { label: "24fps", value: 24 },
@@ -373,6 +454,9 @@ export default function Settings() {
             />
           </SettingItem>
         </Card>
+
+        {/* サイドバーナビ */}
+        <SidebarNavCard />
 
         {/* 通知 */}
         <Card icon="notifications" title="通知" color="#a78bfa">
