@@ -324,19 +324,6 @@ func UploadToCollection(store storage.Storage, database *sql.DB, storageType str
 			fpsVal = 30
 		}
 
-		// サムネイル — thumbnails/ フォルダに保存（統計から除外される）
-		thumbnailName := ""
-		if thumb, err := c.FormFile("thumbnail"); err == nil {
-			if src, err := thumb.Open(); err == nil {
-				defer src.Close()
-				thumbStorePath := "thumbnails/" + filepath.Base(thumb.Filename)
-				if _, err := store.Upload(c.Request.Context(), thumbStorePath, src, thumb.Size); err == nil {
-					thumbnailName = thumbStorePath // パスをそのまま保存
-				} else {
-					log.Printf("[UPLOAD] thumbnail upload failed: %v", err)
-				}
-			}
-		}
 
 		// 一時ファイルに保存
 		tmpDir := os.TempDir()
