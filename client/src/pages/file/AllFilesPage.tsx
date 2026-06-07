@@ -51,13 +51,15 @@ export default function AllFilesPage() {
         <CollectionGrid horizontal />
       </div>
 
-      {/* ── Recent Activity（グリッドが 2 行分の高さを自動決定） ── */}
+      {/* ── Recent Activity ── */}
       <div
         style={{
-          flexShrink: 0,
+          flex: 1,
+          minHeight: 0,
           display: "flex",
           flexDirection: "column",
           gap: 10,
+          overflow: "hidden",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

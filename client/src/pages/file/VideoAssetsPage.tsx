@@ -1,14 +1,18 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { C, F, glassPanel } from "../../theme/tokens";
+import { C, F } from "../../theme/tokens";
 import { Icon } from "../../components/Icon";
-import { getCollectionFiles } from "../../api/collections";
+import { getCollectionFiles, deleteCollectionFile } from "../../api/collections";
 import { useCollections } from "../../hooks/useFiles";
+import { useAuth } from "../../context/AuthContext";
 import { formatBytes, formatRelativeTime } from "../../utils/format";
 import VideoThumbnail from "../../components/file/VideoThumbnail";
 
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+
 interface CollectionFile {
   id: string;
+  collection_id: string;
   file_name: string;
   file_size: number;
   thumbnail_name: string;
@@ -18,73 +22,18 @@ interface CollectionFile {
   uploader_avatar: string;
 }
 
-// ─── ActionBtn ────────────────────────────────────────────────────────────────
-function ActionBtn({ icon, title, danger = false }: { icon: string; title: string; danger?: boolean }) {
-  const [hover, setHover] = useState(false);
-  return (
-    <button
-      title={title}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        padding: 12,
-        borderRadius: 8,
-        border: `1px solid ${danger ? `${C.error}33` : "rgba(69,70,85,0.3)"}`,
-        background: hover ? (danger ? `${C.error}1a` : `${C.primary}1a`) : "transparent",
-        color: danger ? C.error : hover ? C.primary : C.onSurfaceVariant,
-        cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        transition: "all 0.2s",
-      }}
-    >
-      <Icon name={icon} />
-    </button>
-  );
-}
-
 // ─── MetaCell ─────────────────────────────────────────────────────────────────
-function MetaCell({ label, value, children }: { label: string; value?: string; children?: React.ReactNode }) {
+function MetaCell({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p
-        style={{
-          fontFamily: F.family,
-          fontSize: 10,
-          textTransform: "uppercase",
-          letterSpacing: "0.1em",
-          color: C.onSurfaceVariant,
-          marginBottom: 4,
-        }}
-      >
-        {label}
-      </p>
-      {value ? (
-        <p style={{ fontFamily: F.family, fontSize: 14, fontWeight: 700, margin: 0 }}>{value}</p>
-      ) : (
-        children
-      )}
+      <p style={{ margin: 0, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: C.onSurfaceVariant }}>{label}</p>
+      <p style={{ margin: "2px 0 0", fontSize: 13, fontWeight: 700, color: C.onSurface, fontFamily: F.family }}>{value}</p>
     </div>
   );
 }
 
 // ─── RelatedClip ──────────────────────────────────────────────────────────────
-function RelatedClip({
-  fileName,
-  fileId,
-  thumbnailName,
-  title,
-  meta,
-  duration,
-}: {
-  fileName: string;
-  fileId: string;
-  thumbnailName: string;
-  title: string;
-  meta: string;
-  duration: string;
-}) {
+function RelatedClip({ file }: { file: CollectionFile }) {
   const [hover, setHover] = useState(false);
   const navigate = useNavigate();
 
@@ -92,61 +41,34 @@ function RelatedClip({
     <div
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      onClick={() => navigate(`/file/video/${fileId}`)}
+      onClick={() => navigate(`/file/video/${file.id}`)}
       style={{
-        ...glassPanel,
+        display: "flex", gap: 12, cursor: "pointer", borderRadius: 10,
         padding: 8,
-        display: "flex",
-        gap: 16,
-        cursor: "pointer",
-        background: hover ? "rgba(52,52,61,0.2)" : glassPanel.background,
-        transition: "all 0.2s",
+        background: hover ? "rgba(255,255,255,0.06)" : "transparent",
+        transition: "background 0.2s",
       }}
     >
-      {/* サムネイル — via.placeholder.com を使わず VideoThumbnail で表示 */}
-      <div style={{ width: 128, height: 80, borderRadius: 8, overflow: "hidden", position: "relative", flexShrink: 0 }}>
+      <div style={{ width: 100, height: 62, borderRadius: 6, overflow: "hidden", flexShrink: 0 }}>
         <VideoThumbnail
-          fileName={fileName}
+          fileName={file.file_name}
           fileSize={0}
-          fileId={fileId}
-          thumbnailName={thumbnailName}
+          fileId={file.id}
+          thumbnailName={file.thumbnail_name}
         />
-        {duration !== "—" && (
-          <span
-            style={{
-              position: "absolute",
-              bottom: 4,
-              right: 4,
-              padding: "1px 4px",
-              background: "rgba(0,0,0,0.8)",
-              borderRadius: 4,
-              fontFamily: F.family,
-              fontSize: 10,
-              fontWeight: 700,
-              color: "#fff",
-            }}
-          >
-            {duration}
-          </span>
-        )}
       </div>
-      <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", overflow: "hidden" }}>
-        <h3
-          style={{
-            fontFamily: F.family,
-            fontSize: 14,
-            fontWeight: 700,
-            color: hover ? C.primary : C.onSurface,
-            margin: 0,
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            transition: "color 0.2s",
-          }}
-        >
-          {title}
-        </h3>
-        <p style={{ fontFamily: F.family, fontSize: 12, color: C.onSurfaceVariant, margin: "4px 0 0" }}>{meta}</p>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 2 }}>
+        <p style={{
+          margin: 0, fontSize: 12, fontWeight: 700,
+          color: hover ? C.primary : C.onSurface,
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          transition: "color 0.2s",
+        }}>
+          {file.file_name.replace(/\.[^.]+$/, "")}
+        </p>
+        <p style={{ margin: 0, fontSize: 11, color: C.onSurfaceVariant }}>
+          {formatBytes(file.file_size)} · {formatRelativeTime(file.uploaded_at)}
+        </p>
       </div>
     </div>
   );
@@ -155,11 +77,13 @@ function RelatedClip({
 // ─── VideoAssetsPage ──────────────────────────────────────────────────────────
 export default function VideoAssetsPage() {
   const params = useParams<{ fileId: string }>();
+  const navigate = useNavigate();
   const { collections } = useCollections();
+  const { user } = useAuth();
   const [currentFile, setCurrentFile] = useState<CollectionFile | null>(null);
+  const [currentCollectionId, setCurrentCollectionId] = useState("");
   const [relatedFiles, setRelatedFiles] = useState<CollectionFile[]>([]);
   const [loading, setLoading] = useState(true);
-
   const fileId = params.fileId;
 
   useEffect(() => {
@@ -167,189 +91,147 @@ export default function VideoAssetsPage() {
       try {
         setLoading(true);
         let allFiles: CollectionFile[] = [];
-        let currentCollectionId = "";
+        let colId = "";
 
-        // すべてのコレクションからファイルを取得
         for (const collection of collections) {
           const response = await getCollectionFiles(collection.ID);
-          const items = response?.items || [];
-          allFiles = [...allFiles, ...items];
-
-          // 現在のファイルが見つかったらコレクション ID を保存
-          const found = items.find((f: CollectionFile) => f.id === fileId);
-          if (found) {
-            currentCollectionId = collection.ID;
-          }
+          const items: CollectionFile[] = response?.items || [];
+          allFiles = [...allFiles, ...items.map(f => ({ ...f, collection_id: collection.ID }))];
+          if (items.find((f: CollectionFile) => f.id === fileId)) colId = collection.ID;
         }
 
-        // 現在のファイルを探す
         const current = allFiles.find((f) => f.id === fileId);
         setCurrentFile(current || null);
+        setCurrentCollectionId(colId);
 
-        // 同じコレクションの他のファイルを関連動画として表示
-        if (current && currentCollectionId) {
-          const collectionFiles = await getCollectionFiles(currentCollectionId);
+        if (current && colId) {
           const VIDEO_EXTS = [".mp4", ".webm", ".mov", ".mkv", ".avi", ".flv", ".wmv"];
-          const isVideo = (name: string) =>
-            VIDEO_EXTS.some((ext) => name.toLowerCase().endsWith(ext));
-
-          const related = (collectionFiles?.items || [] as CollectionFile[])
-            .filter((f: CollectionFile) => f.id !== fileId && isVideo(f.file_name))
-            .sort(
-              (a: CollectionFile, b: CollectionFile) =>
-                new Date(b.uploaded_at).getTime() -
-                new Date(a.uploaded_at).getTime()
-            )
-            .slice(0, 3);
+          const related = allFiles
+            .filter(f => f.collection_id === colId && f.id !== fileId && VIDEO_EXTS.some(e => f.file_name.toLowerCase().endsWith(e)))
+            .sort((a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime())
+            .slice(0, 6);
           setRelatedFiles(related);
         }
       } finally {
         setLoading(false);
       }
     };
-
     if (fileId && collections.length > 0) fetchData();
   }, [fileId, collections]);
 
-  if (loading) {
-    return (
-      <div style={{ padding: 48, textAlign: "center", color: C.outlineVariant }}>
-        Loading video...
-      </div>
-    );
-  }
+  const handleDownload = () => {
+    const a = document.createElement("a");
+    a.href = `${BASE_URL}/v1/files/${encodeURIComponent(currentFile!.file_name)}`;
+    a.download = currentFile!.file_name;
+    a.click();
+  };
 
-  if (!currentFile) {
-    return (
-      <div style={{ padding: 48, textAlign: "center", color: "#f87171" }}>
-        Video not found
-      </div>
-    );
-  }
+  const handleDelete = async () => {
+    if (!currentFile || !currentCollectionId) return;
+    if (!confirm("このファイルを削除しますか？")) return;
+    try {
+      await deleteCollectionFile(currentCollectionId, currentFile.id);
+      navigate(-1);
+    } catch {
+      alert("削除に失敗しました");
+    }
+  };
+
+  const canDelete = user?.role === "admin" || user?.userId === currentFile?.uploaded_by;
+
+  if (loading) return <div style={{ padding: 48, textAlign: "center", color: C.outlineVariant }}>Loading...</div>;
+  if (!currentFile) return <div style={{ padding: 48, textAlign: "center", color: "#f87171" }}>Video not found</div>;
 
   return (
-    <div
-      style={{
-        flex: 1,
-        overflowY: "auto",
-        padding: 48,
-        background: `radial-gradient(circle at top right, ${C.primary}0d 0%, transparent 60%)`,
-      }}
-    >
-      {/* Breadcrumbs & Actions */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          marginBottom: 24,
-          flexWrap: "wrap",
-          gap: 16,
-        }}
-      >
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-            {["Storage", "Video Assets", "Player"].map((crumb, i, arr) => (
-              <span key={crumb} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span
-                  style={{
-                    fontFamily: F.family,
-                    fontSize: 10,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.1em",
-                    color: i === arr.length - 1 ? C.primary : C.onSurfaceVariant,
-                  }}
-                >
-                  {crumb}
-                </span>
-                {i < arr.length - 1 && (
-                  <Icon name="chevron_right" size={14} style={{ color: C.onSurfaceVariant }} />
-                )}
-              </span>
-            ))}
-          </div>
-          <h1 style={{ fontFamily: F.family, fontSize: 32, fontWeight: 700, margin: 0 }}>
-            {currentFile.file_name}
+    <div style={{
+      flex: 1, minHeight: 0, display: "flex", flexDirection: "column",
+      padding: "16px 24px", gap: 12, overflow: "hidden", boxSizing: "border-box",
+    }}>
+
+      {/* ── ヘッダー ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+        <button
+          onClick={() => navigate(-1)}
+          style={{
+            width: 32, height: 32, borderRadius: 8, border: "1px solid rgba(69,70,85,0.3)",
+            background: "transparent", color: C.onSurfaceVariant,
+            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          <Icon name="arrow_back" size={18} />
+        </button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h1 style={{
+            margin: 0, fontSize: 18, fontWeight: 700, color: C.onSurface,
+            fontFamily: F.family, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          }}>
+            {currentFile.file_name.replace(/\.[^.]+$/, "")}
           </h1>
         </div>
 
-        <div
-          style={{
-            ...glassPanel,
-            padding: 24,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: 24,
-          }}
-        >
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, auto)", gap: "0 40px" }}>
-            <MetaCell label="File Size" value={formatBytes(currentFile.file_size)} />
-            <MetaCell label="Upload Date" value={formatRelativeTime(currentFile.uploaded_at)} />
-            <MetaCell label="Uploaded By" value={currentFile.uploaded_by || "Unknown"} />
-            <MetaCell label="Status">
-              <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#4ade80" }}>
-                <Icon name="verified" size={16} style={{ color: "#4ade80" }} />
-                <span style={{ fontFamily: F.family, fontSize: 12 }}>Secured</span>
-              </div>
-            </MetaCell>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <ActionBtn icon="download" title="Download" />
-            <ActionBtn icon="ios_share" title="Share" />
-            <ActionBtn icon="delete" title="Delete" danger />
-          </div>
+        {/* メタ情報 */}
+        <div style={{ display: "flex", gap: 24, alignItems: "center", flexShrink: 0 }}>
+          <MetaCell label="File Size" value={formatBytes(currentFile.file_size)} />
+          <MetaCell label="Upload Date" value={formatRelativeTime(currentFile.uploaded_at)} />
+          <MetaCell label="Uploaded By" value={currentFile.uploader_name || currentFile.uploaded_by || "Unknown"} />
+        </div>
+
+        {/* アクションボタン */}
+        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+          <ActionBtn icon="download" label="ダウンロード" onClick={handleDownload} />
+          {canDelete && <ActionBtn icon="delete" label="削除" danger onClick={handleDelete} />}
         </div>
       </div>
 
-      {/* Content Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 24 }}>
-        {/* Left - Player */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          <div style={{
-            aspectRatio: "16/9",
-            overflow: "hidden",
-            position: "relative",
-            background: "#000",
-            borderRadius: 12,
-            border: "1px solid rgba(69,70,85,0.4)",
-            // backdropFilter は動画コンテナに使うと GPU レイヤー競合で映像が出なくなるため使わない
-          }}>
-            <video
-              src={`${import.meta.env.VITE_API_BASE_URL ?? ""}/v1/files/${encodeURIComponent(currentFile.file_name)}`}
-              controls
-              style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
-            />
-          </div>
+      {/* ── メインコンテンツ ── */}
+      <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "1fr 280px", gap: 16 }}>
+
+        {/* 動画プレイヤー */}
+        <div style={{ borderRadius: 12, overflow: "hidden", background: "#000", border: "1px solid rgba(69,70,85,0.4)" }}>
+          <video
+            src={`${BASE_URL}/v1/files/${encodeURIComponent(currentFile.file_name)}`}
+            controls
+            style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+          />
         </div>
 
-        {/* Right - Related Clips */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h2 style={{ fontFamily: F.family, fontSize: 24, fontWeight: 700, margin: 0 }}>
-              Related Files
-            </h2>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {relatedFiles.length === 0 ? (
-              <p style={{ color: C.outlineVariant }}>No related files</p>
-            ) : (
-              relatedFiles.map((file) => (
-                <RelatedClip
-                  key={file.id}
-                  fileName={file.file_name}
-                  fileId={file.id}
-                  thumbnailName={file.thumbnail_name || ""}
-                  title={file.file_name.replace(/\.mp4$/i, "")}
-                  meta={`${formatBytes(file.file_size)} • ${formatRelativeTime(file.uploaded_at)}`}
-                  duration="—"
-                />
-              ))
-            )}
+        {/* 関連動画 */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, overflow: "hidden" }}>
+          <h2 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: C.onSurfaceVariant, flexShrink: 0 }}>
+            Related Files
+          </h2>
+          <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+            {relatedFiles.length === 0
+              ? <p style={{ color: C.outlineVariant, fontSize: 13 }}>No related files</p>
+              : relatedFiles.map(f => <RelatedClip key={f.id} file={f} />)
+            }
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── ActionBtn ────────────────────────────────────────────────────────────────
+function ActionBtn({ icon, label, onClick, danger = false }: { icon: string; label: string; onClick: () => void; danger?: boolean }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      title={label}
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        height: 36, paddingInline: 14, borderRadius: 8, gap: 6,
+        border: `1px solid ${danger ? `${C.error}44` : "rgba(69,70,85,0.3)"}`,
+        background: hover ? (danger ? `${C.error}1a` : `${C.primary}1a`) : "rgba(255,255,255,0.03)",
+        color: danger ? C.error : hover ? C.primary : C.onSurfaceVariant,
+        cursor: "pointer", display: "flex", alignItems: "center",
+        fontSize: 12, fontWeight: 600, transition: "all 0.2s",
+      }}
+    >
+      <Icon name={icon} size={16} />
+      <span>{label}</span>
+    </button>
   );
 }

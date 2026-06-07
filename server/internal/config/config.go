@@ -28,11 +28,12 @@ type Config struct {
 			BaseDir string `yaml:"base_dir"`
 		} `yaml:"local"`
 		NAS struct {
-			Host     string `yaml:"host"`
-			User     string `yaml:"user"`
-			Password string `yaml:"password"`
-			Share    string `yaml:"share"`
-			Port     int    `yaml:"port"`
+			Host           string `yaml:"host"`
+			User           string `yaml:"user"`
+			Password       string `yaml:"password"`
+			Share          string `yaml:"share"`
+			Port           int    `yaml:"port"`
+			PrivateKeyPath string `yaml:"private_key"`
 		} `yaml:"nas"`
 	} `yaml:"storage"`
 
@@ -83,11 +84,12 @@ func Load(path string) error {
 				BaseDir string `yaml:"base_dir"`
 			} `yaml:"local"`
 			NAS struct {
-				Host     string `yaml:"host"`
-				User     string `yaml:"user"`
-				Password string `yaml:"password"`
-				Share    string `yaml:"share"`
-				Port     int    `yaml:"port"`
+				Host           string `yaml:"host"`
+				User           string `yaml:"user"`
+				Password       string `yaml:"password"`
+				Share          string `yaml:"share"`
+				Port           int    `yaml:"port"`
+				PrivateKeyPath string `yaml:"private_key"`
 			} `yaml:"nas"`
 		}{Type: "local"},
 		Public: struct {

@@ -48,11 +48,12 @@ func main() {
 	case "nas":
 		// NAS (SMB) の設定
 		store = storage.NewNASStorage(storage.NASConfig{
-			Host:     cfg.Storage.NAS.Host,
-			User:     cfg.Storage.NAS.User,
-			Password: cfg.Storage.NAS.Password,
-			Share:    cfg.Storage.NAS.Share,
-			Port:     cfg.Storage.NAS.Port,
+			Host:           cfg.Storage.NAS.Host,
+			User:           cfg.Storage.NAS.User,
+			Password:       cfg.Storage.NAS.Password,
+			Share:          cfg.Storage.NAS.Share,
+			Port:           cfg.Storage.NAS.Port,
+			PrivateKeyPath: cfg.Storage.NAS.PrivateKeyPath,
 		})
 		log.Printf("storage: nas  host=%s  share=%s", cfg.Storage.NAS.Host, cfg.Storage.NAS.Share)
 	default:
@@ -66,11 +67,12 @@ func main() {
 		}
 		// NAS（デフォルト）
 		return storage.NewNASStorage(storage.NASConfig{
-			Host:     cfg.Storage.NAS.Host,
-			User:     cfg.Storage.NAS.User,
-			Password: cfg.Storage.NAS.Password,
-			Share:    cfg.Storage.NAS.Share,
-			Port:     cfg.Storage.NAS.Port,
+			Host:           cfg.Storage.NAS.Host,
+			User:           cfg.Storage.NAS.User,
+			Password:       cfg.Storage.NAS.Password,
+			Share:          cfg.Storage.NAS.Share,
+			Port:           cfg.Storage.NAS.Port,
+			PrivateKeyPath: cfg.Storage.NAS.PrivateKeyPath,
 		})
 	}
 

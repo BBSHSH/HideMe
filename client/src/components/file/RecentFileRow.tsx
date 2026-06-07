@@ -31,6 +31,7 @@ export default function RecentFileRow({
         background: hovered ? "rgba(255,255,255,0.03)" : "transparent",
         transition: "background 0.2s",
         cursor: "pointer",
+        flexShrink: 0,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>

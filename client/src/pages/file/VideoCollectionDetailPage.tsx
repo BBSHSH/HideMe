@@ -9,16 +9,26 @@ import VideoPlayerGrid from "../../components/file/VideoPlayerGrid";
 import FileUploadButton from "../../components/file/FileUploadButton";
 import { formatBytes, formatRelativeTime } from "../../utils/format";
 
-const CATEGORIES = [
-  { label: "All", value: "All" },
-  { label: "Valorant", value: "Valorant" },
-  { label: "Overwatch", value: "Overwatch" },
-  { label: "Minecraft", value: "Minecraft" },
-  { label: "Tutorials", value: "Tutorials" },
-  { label: "Security Logs", value: "Security Logs" },
-  { label: "Cryptography", value: "Cryptography" },
-  { label: "Live", value: "Live" },
-];
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+
+function fmtDuration(sec: number): string {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+async function getVideoDuration(url: string): Promise<string> {
+  return new Promise((resolve) => {
+    const v = document.createElement("video");
+    v.preload = "metadata";
+    v.src = url;
+    v.onloadedmetadata = () => resolve(fmtDuration(v.duration));
+    v.onerror = () => resolve("—");
+    setTimeout(() => resolve("—"), 5000);
+  });
+}
 
 interface CollectionFile {
   id: string;
@@ -36,8 +46,8 @@ export default function VideoCollectionDetailPage() {
   const navigate = useNavigate();
   const { collections } = useCollections();
   const { user } = useAuth();
-  const [_activeCategory, setActiveCategory] = useState("All");
   const [files, setFiles] = useState<CollectionFile[]>([]);
+  const [durations, setDurations] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,6 +63,13 @@ export default function VideoCollectionDetailPage() {
           f.file_name.toLowerCase().endsWith(".mp4")
         );
         setFiles(mp4Files);
+        // 動画の長さを取得
+        const durationMap: Record<string, string> = {};
+        await Promise.all(mp4Files.map(async (f) => {
+          const url = `${BASE_URL}/v1/files/${encodeURIComponent(f.file_name)}`;
+          durationMap[f.id] = await getVideoDuration(url);
+        }));
+        setDurations(durationMap);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load files");
       } finally {
@@ -69,16 +86,7 @@ export default function VideoCollectionDetailPage() {
     channel: file.uploader_name || "Unknown",
     views: formatBytes(file.file_size),
     time: formatRelativeTime(file.uploaded_at),
-    duration: "—",
-    badge: {
-      type: "SECURE",
-      icon: "verified_user",
-      style: {
-        background: "rgba(74, 222, 128, 0.2)",
-        color: "#4ade80",
-        borderColor: "rgba(74, 222, 128, 0.4)",
-      },
-    },
+    duration: durations[file.id] || "—",
     imgSrc: "",
     avatarSrc: file.uploader_avatar || "",
     uploaderName: file.uploader_name || "Unknown",
@@ -168,8 +176,6 @@ export default function VideoCollectionDetailPage() {
 
           <VideoPlayerGrid
             videos={videoCards}
-            categories={CATEGORIES}
-            onCategoryChange={setActiveCategory}
             onVideoClick={handleVideoClick}
             onDelete={handleDelete}
             currentUserId={user?.userId}

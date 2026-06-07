@@ -1,81 +1,102 @@
-import { glassPanel } from "./styles";
-import RecentFileRow from "./RecentFileRow";
+import { useRef, useState, useEffect } from "react";
 import { useStorageFiles } from "../../hooks/useFiles";
-import { getDownloadUrl } from "../../api/files";
 import { formatBytes, formatRelativeTime } from "../../utils/format";
 import { C } from "../../theme/tokens";
+import CollectionCard from "./CollectionCard";
 
-const VIDEO_EXTS = [".mp4", ".webm", ".mov", ".mkv", ".avi", ".flv", ".wmv"];
-const IMAGE_EXTS = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"];
-
-function fileIcon(name: string): { icon: string; color: string } {
-  const lower = name.toLowerCase();
-  if (VIDEO_EXTS.some((e) => lower.endsWith(e))) return { icon: "movie", color: "#818cf8" };
-  if (IMAGE_EXTS.some((e) => lower.endsWith(e))) return { icon: "image", color: "#34d399" };
-  if (lower.endsWith(".pdf")) return { icon: "picture_as_pdf", color: "#f87171" };
-  return { icon: "insert_drive_file", color: C.primary };
-}
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+const CARD_WIDTH = 200;
+const GAP = 16;
 
 export default function RecentActivity() {
   const { files, loading, error } = useStorageFiles();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canLeft, setCanLeft] = useState(false);
+  const [canRight, setCanRight] = useState(false);
+
+  const updateArrows = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanLeft(el.scrollLeft > 4);
+    setCanRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  };
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    updateArrows();
+    el.addEventListener("scroll", updateArrows);
+    const ro = new ResizeObserver(updateArrows);
+    ro.observe(el);
+    return () => { el.removeEventListener("scroll", updateArrows); ro.disconnect(); };
+  }, [files]);
+
+  const scroll = (dir: "left" | "right") => {
+    scrollRef.current?.scrollBy({ left: dir === "right" ? CARD_WIDTH + GAP : -(CARD_WIDTH + GAP), behavior: "smooth" });
+  };
+
+  const arrowBtn = (dir: "left" | "right", visible: boolean) => (
+    <button
+      onClick={() => scroll(dir)}
+      style={{
+        position: "absolute", top: "50%", [dir]: -16,
+        transform: "translateY(-50%)", zIndex: 10,
+        width: 32, height: 32, borderRadius: "50%",
+        border: "1px solid rgba(88,101,242,0.35)",
+        background: "rgba(18,19,27,0.92)", backdropFilter: "blur(8px)",
+        color: "#bec2ff", display: "flex", alignItems: "center",
+        justifyContent: "center", cursor: "pointer",
+        opacity: visible ? 1 : 0, pointerEvents: visible ? "auto" : "none",
+        transition: "opacity 0.2s", boxShadow: "0 2px 12px rgba(88,101,242,0.25)", padding: 0,
+      }}
+    >
+      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+        {dir === "left" ? "chevron_left" : "chevron_right"}
+      </span>
+    </button>
+  );
+
+  if (loading) return <div style={{ padding: 32, textAlign: "center", color: C.outlineVariant }}>読み込み中...</div>;
+  if (error) return <div style={{ padding: 32, textAlign: "center", color: "#f87171" }}>Failed to load files</div>;
+  if (files.length === 0) return <div style={{ padding: 32, textAlign: "center", color: C.outlineVariant }}>No files yet</div>;
 
   return (
-    <div style={{ marginTop: 40, display: "flex", flexDirection: "column", gap: 20 }}>
-      <h2 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: "#e3e1ed", letterSpacing: "-0.02em" }}>
-        Recent Activity
-      </h2>
+    <div style={{ position: "relative" }}>
+      <style>{`.ra-hscroll::-webkit-scrollbar{display:none}.ra-hscroll{-ms-overflow-style:none;scrollbar-width:none}`}</style>
+      {arrowBtn("left", canLeft)}
       <div
-        style={{
-          ...glassPanel,
-          borderRadius: 16,
-          overflow: "hidden",
-          border: `1px solid #4546551a`,
-        }}
+        ref={scrollRef}
+        className="ra-hscroll"
+        style={{ display: "flex", gap: GAP, overflowX: "auto", overflowY: "visible", paddingBottom: 4, paddingTop: 2 }}
       >
-        <div
-          style={{
-            padding: 20,
-            borderBottom: `1px solid #4546551a`,
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            background: "rgba(255,255,255,0.03)",
-          }}
-        >
-          <span className="material-symbols-outlined" style={{ color: "#bec2ff" }}>
-            history
-          </span>
-          <span style={{ fontWeight: 700, fontSize: 20 }}>Latest files uploaded to vault</span>
-        </div>
-        <div>
-          {loading && (
-            <div style={{ padding: 32, textAlign: "center", color: "#8f8fa0" }}>Loading...</div>
-          )}
-          {error && (
-            <div style={{ padding: 32, textAlign: "center", color: "#f87171" }}>Failed to load files</div>
-          )}
-          {!loading && !error && files.length === 0 && (
-            <div style={{ padding: 32, textAlign: "center", color: "#8f8fa0" }}>No files yet</div>
-          )}
-          {files.map((file, index) => {
-            const { icon, color } = fileIcon(file.name);
-            return (
-              <div key={file.name}>
-                <RecentFileRow
-                  icon={icon}
-                  iconColor={color}
-                  name={file.name}
-                  meta={`${formatRelativeTime(file.modified)} • ${formatBytes(file.size)}`}
-                  downloadUrl={getDownloadUrl(file.name)}
-                />
-                {index < files.length - 1 && (
-                  <div style={{ height: 1, background: `#4546550d` }} />
-                )}
-              </div>
-            );
-          })}
-        </div>
+        {files.map((file) => (
+          <div
+            key={file.name}
+            style={{ flexShrink: 0, width: CARD_WIDTH, cursor: "pointer" }}
+            onClick={() => window.open(`${BASE_URL}/v1/files/${file.name}`, "_blank")}
+          >
+            <CollectionCard
+              title={file.name.replace(/\.[^.]+$/, "")}
+              subtitle={`${formatBytes(file.size)} · ${formatRelativeTime(file.modified)}`}
+              itemCount=""
+              badgeColor={C.primary}
+              badgeBorder={`${C.primary}4d`}
+              buttonColor={C.primary}
+              iconFallback="insert_drive_file"
+              size="small"
+            />
+          </div>
+        ))}
       </div>
+      {canRight && (
+        <div style={{
+          position: "absolute", top: 0, right: 0,
+          width: 72, height: "calc(100% - 4px)",
+          background: "linear-gradient(to right, transparent, #12131b 85%)",
+          pointerEvents: "none",
+        }} />
+      )}
+      {arrowBtn("right", canRight)}
     </div>
   );
 }
