@@ -90,9 +90,11 @@ func runFFmpeg(args []string, totalSec float64, onProgress func(float64)) error 
 		return fmt.Errorf("ffmpeg start: %w", err)
 	}
 
+	var stderrBuf strings.Builder
 	scanner := bufio.NewScanner(stderr)
 	for scanner.Scan() {
 		line := scanner.Text()
+		stderrBuf.WriteString(line + "\n")
 		if m := reOutTime.FindStringSubmatch(line); len(m) == 2 {
 			ms, _ := strconv.ParseFloat(m[1], 64)
 			if totalSec > 0 && onProgress != nil {
@@ -102,7 +104,11 @@ func runFFmpeg(args []string, totalSec float64, onProgress func(float64)) error 
 		}
 	}
 
-	return cmd.Wait()
+	if err := cmd.Wait(); err != nil {
+		log.Printf("[FFMPEG] error output:\n%s", stderrBuf.String())
+		return fmt.Errorf("ffmpeg: %w\n%s", err, stderrBuf.String())
+	}
+	return nil
 }
 
 // buildFFmpegArgs — H.265 (libx265) エンコード引数
