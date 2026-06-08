@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	dbpkg "github.com/BBSHSH/HideMe/server/internal/db"
 	"github.com/BBSHSH/HideMe/server/internal/storage"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -50,6 +51,7 @@ type RecentFileItem struct {
 	UploaderName   string `json:"uploader_name"`
 	UploaderAvatar string `json:"uploader_avatar"`
 	UploadedAt     string `json:"uploaded_at"`
+	ViewCount      int64  `json:"view_count"`
 }
 
 func ListAllFiles(database *sql.DB) gin.HandlerFunc {
@@ -66,7 +68,8 @@ func ListAllFiles(database *sql.DB) gin.HandlerFunc {
 			           CASE WHEN du.discord_id != '' AND du.avatar != ''
 			                THEN 'https://cdn.discordapp.com/avatars/' || du.discord_id || '/' || du.avatar || '.png'
 			                ELSE '' END, '') AS uploader_avatar,
-			       cf.uploaded_at
+			       cf.uploaded_at,
+			       COALESCE(cf.view_count, 0) AS view_count
 			FROM collection_files cf
 			LEFT JOIN collections     col ON col.id  = cf.collection_id
 			LEFT JOIN users            u  ON u.id   = cf.uploaded_by
@@ -86,7 +89,7 @@ func ListAllFiles(database *sql.DB) gin.HandlerFunc {
 			if err := rows.Scan(&f.ID, &f.CollectionID, &f.CollectionName,
 				&f.FileName, &f.FileSize, &f.ThumbnailName,
 				&f.UploadedBy, &f.UploaderName, &f.UploaderAvatar,
-				&f.UploadedAt); err != nil {
+				&f.UploadedAt, &f.ViewCount); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_scan_files"})
 				return
 			}
@@ -96,6 +99,22 @@ func ListAllFiles(database *sql.DB) gin.HandlerFunc {
 			files = []RecentFileItem{}
 		}
 		c.JSON(http.StatusOK, gin.H{"items": files})
+	}
+}
+
+// RecordView は動画の視聴回数を+1する
+func RecordView(database *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		fileID := c.Param("fileID")
+		if fileID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "missing file id"})
+			return
+		}
+		if err := dbpkg.IncrementViewCount(database, fileID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true})
 	}
 }
 

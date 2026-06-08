@@ -40,6 +40,7 @@ interface VideoFile {
   collection_id: string;
   collection_name: string;
   color: string;
+  view_count?: number;
 }
 
 // ── VideoCard ─────────────────────────────────────────────────────────────────
@@ -129,6 +130,7 @@ function VideoCard({ video, duration, onPlay }: { video: VideoFile; duration?: s
             {video.uploader_name || "Unknown"}
           </p>
           <p style={{ margin: "1px 0 0", fontSize: 10, color: "rgba(255,255,255,0.3)" }}>
+            {video.view_count != null && video.view_count > 0 && `${video.view_count.toLocaleString()}回視聴 · `}
             {formatBytes(video.file_size)} · {formatRelativeTime(video.uploaded_at)}
           </p>
         </div>

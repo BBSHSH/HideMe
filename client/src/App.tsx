@@ -11,6 +11,7 @@ import AdminAuthSettings from './pages/AdminAuthSettings'
 import FileLayout from './layouts/FileLayout.tsx'
 import AllFilesPage from './pages/file/AllFilesPage'
 import VideoFilesPage from './pages/file/VideoFilesPage.tsx'
+import ShortsPage from './pages/file/ShortsPage.tsx'
 import VideoCollectionRedirect from "./pages/file/VideoCollectionRedirect.tsx";
 
 import CollectionDetailPage from './pages/file/CollectionDetailPage'
@@ -46,6 +47,7 @@ function App() {
             <Route path="/file" element={<FileLayout />}>
               <Route index element={<AllFilesPage />} />
               <Route path="videos" element={<VideoFilesPage />} />
+              <Route path="shorts" element={<ShortsPage />} />
               <Route path="/file/videocollection/:id" element={<VideoCollectionRedirect />} />
               <Route path="/file/video/:fileId" element={<VideoAssetsPage />} />
               <Route path="collection/:id" element={<CollectionDetailPage />} />

@@ -31,6 +31,7 @@ type CollectionFileWithUploader struct {
 	UploaderName   string    `json:"uploader_name"`
 	UploaderAvatar string    `json:"uploader_avatar"`
 	UploadedAt     time.Time `json:"uploaded_at"`
+	ViewCount      int64     `json:"view_count"`
 }
 
 var ErrFileNotFound = errors.New("file not found")
@@ -77,7 +78,8 @@ func ListFilesByCollectionWithUploader(db *sql.DB, collectionID string) ([]Colle
 			cf.uploaded_at,
 			COALESCE(u.username, du.username, 'Unknown') AS uploader_name,
 			COALESCE(du.avatar, '')                      AS uploader_avatar,
-			COALESCE(du.discord_id, '')                  AS discord_id
+			COALESCE(du.discord_id, '')                  AS discord_id,
+			COALESCE(cf.view_count, 0)                   AS view_count
 		FROM collection_files cf
 		LEFT JOIN users         u  ON u.id  = cf.uploaded_by
 		LEFT JOIN discord_users du ON du.id = cf.uploaded_by
@@ -96,7 +98,7 @@ func ListFilesByCollectionWithUploader(db *sql.DB, collectionID string) ([]Colle
 		if err := rows.Scan(
 			&f.ID, &f.CollectionID, &f.FileName, &f.FileSize,
 			&f.ThumbnailName, &f.StorageType, &f.UploadedBy, &f.UploadedAt,
-			&f.UploaderName, &f.UploaderAvatar, &discordID,
+			&f.UploaderName, &f.UploaderAvatar, &discordID, &f.ViewCount,
 		); err != nil {
 			return nil, err
 		}
@@ -109,6 +111,12 @@ func ListFilesByCollectionWithUploader(db *sql.DB, collectionID string) ([]Colle
 		files = append(files, f)
 	}
 	return files, rows.Err()
+}
+
+// IncrementViewCount は指定ファイルの視聴回数を1増やす
+func IncrementViewCount(db *sql.DB, fileID string) error {
+	_, err := db.Exec(`UPDATE collection_files SET view_count = COALESCE(view_count, 0) + 1 WHERE id = ?`, fileID)
+	return err
 }
 
 func ListFilesByCollection(db *sql.DB, collectionID string) ([]CollectionFile, error) {

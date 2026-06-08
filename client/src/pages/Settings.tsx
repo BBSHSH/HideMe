@@ -280,10 +280,10 @@ function SidebarNavCard() {
   const handleDragEnd = () => { dragIndex.current = null; };
 
   return (
-    <Card icon="list" title="サイドバーナビ" color="#34d399">
+    <Card icon="list" title="ナビゲーション" color="#34d399">
       <div style={{ paddingTop: 8, paddingBottom: 4, display: "flex", flexDirection: "column", gap: 2 }}>
         <p style={{ margin: "0 0 10px", fontSize: 11, color: C.outline, fontWeight: 600 }}>
-          ドラッグで並び替え・トグルで表示切替
+          PC サイドバー・スマホメニュー共通
         </p>
         {items.map((item, i) => (
           <div
@@ -457,6 +457,7 @@ export default function Settings() {
 
         {/* サイドバーナビ */}
         <SidebarNavCard />
+
 
         {/* 通知 */}
         <Card icon="notifications" title="通知" color="#a78bfa">

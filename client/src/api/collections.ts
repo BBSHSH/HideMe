@@ -69,6 +69,18 @@ export const deleteCollection = (id: string) => {
     return res.json() as Promise<{ deleted: boolean }>;
   });
 };
+export const recordView = (collectionId: string, fileId: string): Promise<void> => {
+  return fetch(
+    `${import.meta.env.VITE_API_BASE_URL ?? ""}/v1/collections/${collectionId}/files/${fileId}/view`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${JSON.parse(localStorage.getItem("hideme_auth") || "{}").token}`,
+      },
+    }
+  ).then(() => {});
+};
+
 export const deleteCollectionFile = (collectionId: string, fileId: string): Promise<{ deleted: boolean }> => {
   return fetch(
     `${import.meta.env.VITE_API_BASE_URL ?? ""}/v1/collections/${collectionId}/files/${fileId}`,

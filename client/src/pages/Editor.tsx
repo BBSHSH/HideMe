@@ -4,6 +4,7 @@ import { C, F } from "../theme/tokens";
 import { Icon } from "../components/Icon";
 import { useSettings } from "../context/SettingsContext";
 import { useUpload } from "../context/UploadContext";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -31,6 +32,7 @@ export default function Editor() {
   const file = state?.file ?? null;
   const { settings } = useSettings();
   const { startUpload } = useUpload();
+  const isMobile = useIsMobile();
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -199,6 +201,34 @@ export default function Editor() {
 
   const handleBack = () => navigate(-1);
 
+  // ─── タイムラインタッチ対応 ───
+  const startTouchDrag = (handle: "start" | "end") => (e: React.TouchEvent) => {
+    e.preventDefault();
+    draggingRef.current = handle;
+    const onMove = (ev: TouchEvent) => {
+      const el = timelineRef.current;
+      if (!el || draggingRef.current === null) return;
+      const rect = el.getBoundingClientRect();
+      const sec = pxToSec(ev.touches[0].clientX - rect.left);
+      if (draggingRef.current === "start") {
+        const clamped = Math.max(0, Math.min(sec, trimEnd - 0.1));
+        setTrimStart(clamped);
+        if (videoRef.current) videoRef.current.currentTime = clamped;
+      } else {
+        const clamped = Math.min(duration, Math.max(sec, trimStart + 0.1));
+        setTrimEnd(clamped);
+        if (videoRef.current) videoRef.current.currentTime = clamped;
+      }
+    };
+    const onUp = () => {
+      draggingRef.current = null;
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onUp);
+    };
+    window.addEventListener("touchmove", onMove, { passive: false });
+    window.addEventListener("touchend", onUp);
+  };
+
   // ─── スタイル ───
 
   const sidebarLabel = {
@@ -228,33 +258,25 @@ export default function Editor() {
 
     return (
       <div style={{
-        height: "calc(100vh - 72px)",
+        height: isMobile ? "calc(100vh - 56px)" : "calc(100vh - 72px)",
         display: "flex", alignItems: "center", justifyContent: "center",
         flexDirection: "column", gap: 20,
-        fontFamily: F.family,
+        fontFamily: F.family, padding: isMobile ? "0 24px" : 0,
       }}>
         <div
           onClick={pickFile}
           style={{
             display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
-            padding: "48px 64px", borderRadius: 20, cursor: "pointer",
+            padding: isMobile ? "40px 32px" : "48px 64px", borderRadius: 20, cursor: "pointer",
             border: "2px dashed rgba(88,101,242,0.25)",
             background: "rgba(88,101,242,0.04)",
-            transition: "all 0.2s",
-          }}
-          onMouseEnter={e => {
-            (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(88,101,242,0.5)";
-            (e.currentTarget as HTMLDivElement).style.background = "rgba(88,101,242,0.08)";
-          }}
-          onMouseLeave={e => {
-            (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(88,101,242,0.25)";
-            (e.currentTarget as HTMLDivElement).style.background = "rgba(88,101,242,0.04)";
+            transition: "all 0.2s", width: isMobile ? "100%" : "auto",
           }}
         >
-          <Icon name="video_file" size={56} style={{ color: "rgba(88,101,242,0.5)" }} />
+          <Icon name="video_file" size={isMobile ? 48 : 56} style={{ color: "rgba(88,101,242,0.5)" }} />
           <div style={{ textAlign: "center" }}>
-            <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.onSurface }}>動画ファイルを選択</p>
-            <p style={{ margin: "6px 0 0", fontSize: 12, color: C.outlineVariant }}>クリックしてファイルを開く</p>
+            <p style={{ margin: 0, fontSize: isMobile ? 15 : 16, fontWeight: 700, color: C.onSurface }}>動画ファイルを選択</p>
+            <p style={{ margin: "6px 0 0", fontSize: 12, color: C.outlineVariant }}>タップしてファイルを開く</p>
           </div>
         </div>
         <button onClick={handleBack} style={{
@@ -272,6 +294,256 @@ export default function Editor() {
   const startPct = duration > 0 ? (trimStart / duration) * 100 : 0;
   const endPct = duration > 0 ? (trimEnd / duration) * 100 : 100;
   const playPct = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  // ─── モバイルレイアウト ───
+  if (isMobile) {
+    const [activeTab, setActiveTab] = useState<"trim" | "settings">("trim");
+    return (
+      <div style={{
+        height: "calc(100vh - 56px)", display: "flex", flexDirection: "column",
+        background: C.background, fontFamily: F.family, overflow: "hidden",
+      }}>
+        {/* ヘッダー */}
+        <div style={{
+          flexShrink: 0, display: "flex", alignItems: "center", gap: 10,
+          padding: "8px 12px", borderBottom: "1px solid rgba(69,70,85,0.2)",
+          background: "rgba(13,14,22,0.9)",
+        }}>
+          <button onClick={handleBack} style={{
+            background: "none", border: "none", color: C.onSurfaceVariant, cursor: "pointer", padding: 4,
+            display: "flex", alignItems: "center",
+          }}>
+            <Icon name="arrow_back" size={22} />
+          </button>
+          <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: C.onSurface,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {file.name.replace(/\.[^.]+$/, "")}
+          </span>
+        </div>
+
+        {/* 動画プレイヤー：高さ上限30vh・縦横どちらでも収まる */}
+        <div style={{ flexShrink: 0, width: "100%", maxHeight: "30vh", background: "#000",
+          display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <video
+            ref={videoRef}
+            src={videoUrl || undefined}
+            style={{ maxWidth: "100%", maxHeight: "30vh", width: "auto", height: "auto", display: "block" }}
+            onLoadedMetadata={handleLoadedMetadata}
+            onTimeUpdate={handleTimeUpdate}
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
+          />
+        </div>
+
+        {/* 時間表示 + シークバー */}
+        <div style={{ flexShrink: 0, padding: "8px 16px 4px", background: "rgba(13,14,22,0.9)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+            <span style={{ fontSize: 12, color: "#bec2ff", fontWeight: 600 }}>{fmtTime(currentTime)} / {fmtTime(duration)}</span>
+            <span style={{ fontSize: 11, color: "#8f8fa0" }}>{fmtTime(trimStart)} → {fmtTime(trimEnd)}</span>
+          </div>
+          {/* シークバー */}
+          <div style={{ height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 2, marginBottom: 10, cursor: "pointer" }}
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const sec = ((e.clientX - rect.left) / rect.width) * duration;
+              if (videoRef.current) videoRef.current.currentTime = sec;
+            }}>
+            <div style={{ height: "100%", width: `${playPct}%`, background: "#5865F2", borderRadius: 2 }} />
+          </div>
+          {/* 再生コントロール */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 32, paddingBottom: 8 }}>
+            <button onClick={() => { if (videoRef.current) videoRef.current.currentTime = trimStart; }}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "#fff", opacity: 0.8, padding: 0 }}>
+              <Icon name="skip_previous" size={28} />
+            </button>
+            <button onClick={togglePlay}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "#fff", padding: 0 }}>
+              <Icon name={isPlaying ? "pause_circle" : "play_circle"} size={52} filled />
+            </button>
+            <button onClick={() => { if (videoRef.current) videoRef.current.currentTime = trimEnd - 0.1; }}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "#fff", opacity: 0.8, padding: 0 }}>
+              <Icon name="skip_next" size={28} />
+            </button>
+          </div>
+        </div>
+
+        {/* タブ切り替え */}
+        <div style={{ flexShrink: 0, display: "flex", borderBottom: "1px solid rgba(69,70,85,0.2)",
+          background: "rgba(18,19,27,0.95)" }}>
+          {(["trim", "settings"] as const).map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)} style={{
+              flex: 1, padding: "10px 0", border: "none", cursor: "pointer", fontFamily: F.family,
+              background: "transparent", fontSize: 13, fontWeight: 700,
+              color: activeTab === tab ? "#5865F2" : C.onSurfaceVariant,
+              borderBottom: `2px solid ${activeTab === tab ? "#5865F2" : "transparent"}`,
+              transition: "all 0.15s",
+            }}>
+              {tab === "trim" ? "✂️ トリム" : "⚙️ 設定"}
+            </button>
+          ))}
+        </div>
+
+        {/* タブコンテンツ */}
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", background: "rgba(13,14,22,0.95)" }}>
+          {activeTab === "trim" ? (
+            <div style={{ padding: "16px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <Icon name="content_cut" size={15} style={{ color: "#5865F2" }} />
+                  <span style={{ fontSize: 12, color: "#5865F2", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>トリム</span>
+                </div>
+                <span style={{ fontSize: 11, color: "#8f8fa0" }}>選択: {fmtTime(trimEnd - trimStart)}</span>
+              </div>
+              {/* タイムライン（タッチ対応） */}
+              <div ref={timelineRef}
+                onClick={handleTimelineClick}
+                style={{ position: "relative", height: 64, background: "#0d0e16", borderRadius: 8,
+                  overflow: "hidden", cursor: "pointer", border: "1px solid rgba(69,70,85,0.3)",
+                  userSelect: "none", touchAction: "none" }}>
+                <div style={{ position: "absolute", left: 0, top: 0, width: `${startPct}%`, height: "100%", background: "rgba(0,0,0,0.5)", zIndex: 1 }} />
+                <div style={{ position: "absolute", right: 0, top: 0, width: `${100 - endPct}%`, height: "100%", background: "rgba(0,0,0,0.5)", zIndex: 1 }} />
+                <div style={{ position: "absolute", left: `${startPct}%`, width: `${endPct - startPct}%`, top: 0, bottom: 0,
+                  background: "rgba(88,101,242,0.15)", borderTop: "2px solid #5865F2", borderBottom: "2px solid #5865F2", zIndex: 2 }} />
+                <div style={{ position: "absolute", left: `${playPct}%`, top: 0, bottom: 0, width: 2,
+                  background: "#5865F2", zIndex: 4, boxShadow: "0 0 6px rgba(88,101,242,0.8)" }} />
+                {/* 開始ハンドル（タッチ対応・大きめ） */}
+                <div onMouseDown={startDrag("start")} onTouchStart={startTouchDrag("start")}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ position: "absolute", left: `${startPct}%`, top: 0, bottom: 0, width: 20,
+                    background: "#5865F2", cursor: "col-resize", zIndex: 5,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    transform: "translateX(-10px)", touchAction: "none" }}>
+                  <div style={{ width: 2, height: 24, background: "#fff", borderRadius: 1 }} />
+                </div>
+                {/* 終了ハンドル（タッチ対応・大きめ） */}
+                <div onMouseDown={startDrag("end")} onTouchStart={startTouchDrag("end")}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ position: "absolute", left: `${endPct}%`, top: 0, bottom: 0, width: 20,
+                    background: "#5865F2", cursor: "col-resize", zIndex: 5,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    transform: "translateX(-10px)", touchAction: "none" }}>
+                  <div style={{ width: 2, height: 24, background: "#fff", borderRadius: 1 }} />
+                </div>
+                <div style={{ position: "absolute", bottom: 4, left: 0, right: 0,
+                  display: "flex", justifyContent: "space-between", padding: "0 8px",
+                  fontSize: 9, color: "#454655", zIndex: 3, pointerEvents: "none" }}>
+                  <span>0:00</span><span>{fmtTime(duration * 0.5)}</span><span>{fmtTime(duration)}</span>
+                </div>
+              </div>
+              {/* 開始・終了の数値入力 */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 14 }}>
+                <div>
+                  <p style={{ margin: "0 0 4px", fontSize: 11, color: "#5865F2", fontWeight: 700 }}>開始</p>
+                  <div style={{ background: "rgba(26,27,35,0.8)", border: "1px solid rgba(69,70,85,0.4)",
+                    borderRadius: 8, padding: "8px 12px", fontSize: 13, fontWeight: 700, color: "#bec2ff" }}>
+                    {fmtTime(trimStart)}
+                  </div>
+                </div>
+                <div>
+                  <p style={{ margin: "0 0 4px", fontSize: 11, color: "#5865F2", fontWeight: 700 }}>終了</p>
+                  <div style={{ background: "rgba(26,27,35,0.8)", border: "1px solid rgba(69,70,85,0.4)",
+                    borderRadius: 8, padding: "8px 12px", fontSize: 13, fontWeight: 700, color: "#bec2ff" }}>
+                    {fmtTime(trimEnd)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 20 }}>
+              {/* ファイル名 */}
+              <div>
+                <p style={{ margin: "0 0 8px", fontSize: 12, color: "#5865F2", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>ファイル名</p>
+                <input type="text" value={outputName} onChange={(e) => setOutputName(e.target.value)}
+                  placeholder="ファイル名（拡張子不要）"
+                  style={{ width: "100%", boxSizing: "border-box", background: "rgba(26,27,35,0.8)",
+                    border: "1px solid rgba(69,70,85,0.4)", borderRadius: 8,
+                    padding: "10px 12px", color: "#e3e1ed", fontSize: 14, fontFamily: F.family, outline: "none" }} />
+                <p style={{ margin: "4px 0 0", fontSize: 10, color: "#454655" }}>出力: {outputName || file.name.replace(/\.[^.]+$/, "")}.mp4</p>
+              </div>
+              {/* コレクション */}
+              <div>
+                <p style={{ margin: "0 0 8px", fontSize: 12, color: "#5865F2", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>アップロード先</p>
+                <select value={collectionId} onChange={(e) => setCollectionId(e.target.value)}
+                  style={{ width: "100%", background: "rgba(26,27,35,0.8)",
+                    border: "1px solid rgba(69,70,85,0.4)", borderRadius: 8,
+                    padding: "10px 12px", color: "#e3e1ed", fontSize: 14, fontFamily: F.family, outline: "none" }}>
+                  {collections.length === 0 && <option value="">コレクションがありません</option>}
+                  {collections.map(col => <option key={col.ID} value={col.ID}>{col.Name}</option>)}
+                </select>
+              </div>
+              {/* 音量 */}
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <p style={{ margin: 0, fontSize: 12, color: "#5865F2", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>音量</p>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: "#bec2ff" }}>{volume}%</span>
+                </div>
+                <input type="range" min={0} max={200} value={volume}
+                  onChange={(e) => setVolume(Number(e.target.value))}
+                  style={{ width: "100%", accentColor: "#5865F2" }} />
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#454655", marginTop: 2 }}>
+                  <span>0%</span><span>100%</span><span>200%</span>
+                </div>
+              </div>
+              {/* 解像度 */}
+              <div>
+                <p style={{ margin: "0 0 8px", fontSize: 12, color: "#5865F2", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>画質</p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  {(["1080p", "720p", "480p", "240p"] as Resolution[]).map(r => (
+                    <button key={r} onClick={() => setResolution(r)} style={{
+                      padding: "10px 0", borderRadius: 8,
+                      border: `1px solid ${resolution === r ? "#5865F2" : "rgba(69,70,85,0.3)"}`,
+                      background: resolution === r ? "rgba(88,101,242,0.15)" : "rgba(26,27,35,0.8)",
+                      color: resolution === r ? "#bec2ff" : C.onSurfaceVariant,
+                      fontSize: 13, fontWeight: 700, cursor: "pointer",
+                    }}>
+                      {r}{r === "720p" && <span style={{ fontSize: 9, opacity: 0.7 }}> (推奨)</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* FPS */}
+              <div>
+                <p style={{ margin: "0 0 8px", fontSize: 12, color: "#5865F2", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>フレームレート</p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                  {([24, 30, 60] as FPS[]).map(f => (
+                    <button key={f} onClick={() => setFps(f)} style={{
+                      padding: "10px 0", borderRadius: 8,
+                      border: `1px solid ${fps === f ? "#5865F2" : "rgba(69,70,85,0.3)"}`,
+                      background: fps === f ? "rgba(88,101,242,0.15)" : "rgba(26,27,35,0.8)",
+                      color: fps === f ? "#bec2ff" : C.onSurfaceVariant,
+                      fontSize: 13, fontWeight: 700, cursor: "pointer",
+                    }}>
+                      {f}fps
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* アップロードボタン（固定底部・iPhoneセーフエリア対応） */}
+        <div style={{ flexShrink: 0, padding: "12px 16px", borderTop: "1px solid rgba(69,70,85,0.2)",
+          background: "rgba(13,14,22,0.95)",
+          paddingBottom: "calc(12px + env(safe-area-inset-bottom, 0px))" }}>
+          <button onClick={handleUpload} disabled={!collectionId} style={{
+            width: "100%", padding: "14px 0",
+            background: !collectionId ? "rgba(88,101,242,0.3)" : "#5865F2",
+            color: "#fff", border: "none", borderRadius: 10, fontWeight: 700,
+            fontSize: 15, cursor: !collectionId ? "not-allowed" : "pointer",
+            fontFamily: F.family, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            boxShadow: collectionId ? "0 0 20px rgba(88,101,242,0.4)" : "none",
+          }}>
+            <Icon name="cloud_upload" size={20} />
+            アップロード開始
+          </button>
+          <p style={{ margin: "6px 0 0", fontSize: 10, textAlign: "center", color: C.outlineVariant }}>
+            バックグラウンドでアップロードされます
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

@@ -11,6 +11,7 @@ export type NavItemConfig = {
 export const DEFAULT_NAV_ITEMS: NavItemConfig[] = [
   { id: "all",       icon: "grid_view",          label: "すべて",     to: "/file",            enabled: true  },
   { id: "videos",    icon: "movie",              label: "動画",       to: "/file/videos",     enabled: true  },
+  { id: "shorts",    icon: "play_circle",        label: "Shorts",     to: "/file/shorts",     enabled: true  },
   { id: "images",    icon: "image",              label: "画像",       to: "/file/images",     enabled: true  },
   { id: "others",    icon: "insert_drive_file",  label: "その他",     to: "/file/others",     enabled: true  },
   { id: "favorites", icon: "favorite",           label: "お気に入り", to: "/file/favorites",  enabled: true  },

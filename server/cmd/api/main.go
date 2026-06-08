@@ -127,6 +127,7 @@ func main() {
 	api.POST("/collections/:id/chunk", middleware.RequireAuth(), handlers.UploadChunk())
 	api.POST("/collections/:id/merge", middleware.RequireAuth(), handlers.MergeAndUpload(store, database, cfg.Storage.Type))
 	api.DELETE("/collections/:id/files/:fileID", middleware.RequireAuth(), handlers.DeleteCollectionFile(database, storeFor))
+	api.POST("/collections/:id/files/:fileID/view", middleware.RequireAuth(), handlers.RecordView(database))
 
 	// SSE: アップロード進捗（Cloudflare非経由の場合）
 	api.GET("/upload-progress/:uploadId", handlers.SSEUploadProgress())

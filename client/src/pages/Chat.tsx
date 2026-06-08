@@ -123,12 +123,16 @@ function MessageArea({ items, myUserId, isAdmin, onDelete }: {
 }
 
 // ─── 入力欄 ──────────────────────────────────────────────────
+const MAX_CHARS = 2000;
+
 function InputBar({ placeholder, onSend }: { placeholder: string; onSend: (t: string) => Promise<void> }) {
   const C = useColors();
   const [val, setVal] = useState("");
   const [sending, setSending] = useState(false);
+  const overLimit = val.length > MAX_CHARS;
+  const nearLimit = val.length > MAX_CHARS * 0.8;
   const send = async () => {
-    if (!val.trim() || sending) return;
+    if (!val.trim() || sending || overLimit) return;
     setSending(true);
     try { await onSend(val.trim()); setVal(""); } finally { setSending(false); }
   };
@@ -136,7 +140,8 @@ function InputBar({ placeholder, onSend }: { placeholder: string; onSend: (t: st
     <div style={{ padding: "8px 16px 12px", flexShrink: 0 }}>
       <div style={{ display: "flex", alignItems: "flex-end",
         background: C.surfaceVariant, borderRadius: 10,
-        border: `1px solid ${C.outlineVariant}44`, padding: "6px 12px" }}>
+        border: `1px solid ${overLimit ? "#f87171" : C.outlineVariant + "44"}`, padding: "6px 12px",
+        transition: "border-color 0.15s" }}>
         <textarea value={val} onChange={(e) => setVal(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
           placeholder={placeholder} rows={1}
@@ -148,14 +153,22 @@ function InputBar({ placeholder, onSend }: { placeholder: string; onSend: (t: st
             el.style.height = "auto";
             el.style.height = Math.min(el.scrollHeight, 120) + "px";
           }} />
-        <button onClick={send} disabled={!val.trim() || sending} style={{
-          background: val.trim() ? C.primaryContainer : "transparent", border: "none",
+        <button onClick={send} disabled={!val.trim() || sending || overLimit} style={{
+          background: val.trim() && !overLimit ? C.primaryContainer : "transparent", border: "none",
           borderRadius: 7, padding: "6px 8px", marginLeft: 4, flexShrink: 0,
-          color: val.trim() ? C.onPrimaryContainer : C.outline,
-          cursor: val.trim() ? "pointer" : "default", display: "flex", alignItems: "center",
+          color: val.trim() && !overLimit ? C.onPrimaryContainer : C.outline,
+          cursor: val.trim() && !overLimit ? "pointer" : "default", display: "flex", alignItems: "center",
         }}><Icon name="send" size={18} /></button>
       </div>
-      <p style={{ margin: "3px 0 0", fontSize: 11, color: C.outline }}>Enter で送信 · Shift+Enter で改行</p>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 3 }}>
+        <p style={{ margin: 0, fontSize: 11, color: C.outline }}>Enter で送信 · Shift+Enter で改行</p>
+        {nearLimit && (
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 700,
+            color: overLimit ? "#f87171" : val.length > MAX_CHARS * 0.9 ? "#f59e0b" : C.outline }}>
+            {MAX_CHARS - val.length}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

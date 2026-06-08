@@ -6,6 +6,7 @@ import { C, F, glassPanel } from "../theme/tokens";
 import appIcon from "../assets/icon.png";
 import { useAuth } from "../context/AuthContext";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { useSidebarNav } from "../hooks/useSidebarNav";
 
 export type NavItem = {
   id: string;
@@ -15,11 +16,10 @@ export type NavItem = {
 };
 
 type HeaderProps = {
-  navItems?: NavItem[];
   onLogout?: () => void;
 };
 
-const defaultNavItems: NavItem[] = [
+const PC_NAV_ITEMS: NavItem[] = [
   { id: "dashboard", icon: "dashboard",     label: "Dash",    path: "/"        },
   { id: "messages",  icon: "forum",          label: "Chat",    path: "/chat"    },
   { id: "storage",   icon: "folder_shared",  label: "Storage", path: "/file"    },
@@ -27,7 +27,10 @@ const defaultNavItems: NavItem[] = [
   { id: "settings",  icon: "settings",       label: "Config",  path: "/settings"},
 ];
 
-export default function Header({ navItems = defaultNavItems, onLogout }: HeaderProps) {
+export default function Header({ onLogout }: HeaderProps) {
+  const { items: allMobileNavItems } = useSidebarNav();
+  const mobileNavItems = allMobileNavItems.filter((i) => i.enabled).map((i) => ({ id: i.id, icon: i.icon, label: i.label, path: i.to }));
+  const navItems = PC_NAV_ITEMS;
   const [showMenu,   setShowMenu]   = useState(false);
   const [showDrawer, setShowDrawer] = useState(false);
   const { user, isAdmin } = useAuth();
@@ -72,7 +75,7 @@ export default function Header({ navItems = defaultNavItems, onLogout }: HeaderP
 
             {/* ナビリンク */}
             <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4, padding: "12px 12px" }}>
-              {navItems.map((item) => (
+              {mobileNavItems.map((item) => (
                 <NavLink key={item.id} to={item.path} end={item.path === "/"}
                   onClick={() => setShowDrawer(false)}
                   style={({ isActive }) => ({

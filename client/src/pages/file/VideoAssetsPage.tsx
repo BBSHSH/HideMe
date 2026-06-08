@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { C, F } from "../../theme/tokens";
 import { Icon } from "../../components/Icon";
-import { getCollectionFiles, deleteCollectionFile } from "../../api/collections";
+import { getCollectionFiles, deleteCollectionFile, recordView } from "../../api/collections";
 import { useCollections } from "../../hooks/useFiles";
 import { useAuth } from "../../context/AuthContext";
 import { formatBytes, formatRelativeTime } from "../../utils/format";
@@ -21,6 +21,7 @@ interface CollectionFile {
   uploaded_by: string;
   uploader_name: string;
   uploader_avatar: string;
+  view_count?: number;
 }
 
 // ─── MetaCell ─────────────────────────────────────────────────────────────────
@@ -105,6 +106,11 @@ export default function VideoAssetsPage() {
         setCurrentFile(current || null);
         setCurrentCollectionId(colId);
 
+        // 視聴回数カウント
+        if (current && colId) {
+          recordView(colId, current.id).catch(() => {});
+        }
+
         if (current && colId) {
           const VIDEO_EXTS = [".mp4", ".webm", ".mov", ".mkv", ".avi", ".flv", ".wmv"];
           const related = allFiles
@@ -188,6 +194,7 @@ export default function VideoAssetsPage() {
               <MetaCell label="サイズ" value={formatBytes(currentFile.file_size)} />
               <MetaCell label="アップロード" value={formatRelativeTime(currentFile.uploaded_at)} />
               <MetaCell label="投稿者" value={currentFile.uploader_name || currentFile.uploaded_by || "Unknown"} />
+              {currentFile.view_count != null && <MetaCell label="視聴回数" value={`${currentFile.view_count.toLocaleString()}回`} />}
             </div>
 
             {/* アクション */}
@@ -235,6 +242,7 @@ export default function VideoAssetsPage() {
               <MetaCell label="File Size" value={formatBytes(currentFile.file_size)} />
               <MetaCell label="Upload Date" value={formatRelativeTime(currentFile.uploaded_at)} />
               <MetaCell label="Uploaded By" value={currentFile.uploader_name || currentFile.uploaded_by || "Unknown"} />
+              {currentFile.view_count != null && <MetaCell label="視聴回数" value={`${currentFile.view_count.toLocaleString()}回`} />}
             </div>
             <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
               <ActionBtn icon="download" label="ダウンロード" onClick={handleDownload} />

@@ -129,6 +129,7 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE collection_files ADD COLUMN thumbnail_name TEXT`,
 		`ALTER TABLE collection_files ADD COLUMN storage_type TEXT NOT NULL DEFAULT 'nas'`,
 		`ALTER TABLE chat_channels ADD COLUMN type TEXT NOT NULL DEFAULT 'text'`,
+		`ALTER TABLE collection_files ADD COLUMN view_count INTEGER NOT NULL DEFAULT 0`,
 	} {
 		if _, err := db.Exec(ddl); err != nil {
 			if !isDuplicateColumn(err) {

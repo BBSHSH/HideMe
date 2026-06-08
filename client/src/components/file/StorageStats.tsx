@@ -24,9 +24,6 @@ function InfoCard({
   return (
     <div style={{
       flex: 1,
-      background: `${color}0d`,
-      border: `1px solid ${color}28`,
-      borderRadius: 14,
       padding: "14px 16px",
       display: "flex", alignItems: "center", gap: 12,
       minWidth: 0,

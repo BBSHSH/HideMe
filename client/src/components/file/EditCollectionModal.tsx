@@ -4,6 +4,15 @@ import { Icon } from "../Icon";
 import { updateCollection, deleteCollection, uploadCollectionImage } from "../../api/collections";
 import type { Collection } from "../../data/files";
 
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+
+function resolveImageURL(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (url.startsWith("http")) return url;
+  if (url.startsWith("/v1/") || url.startsWith("/")) return `${BASE_URL}${url}`;
+  return `${BASE_URL}/v1/files/${encodeURIComponent(url)}`;
+}
+
 const PRESET_COLORS = [
   "#bec2ff", "#ffb689", "#e3e1ed", "#f28b82", "#81c995", "#78d9ec",
 ];
@@ -20,7 +29,7 @@ export default function EditCollectionModal({ collection, onClose, onUpdated, on
   const [description, setDescription] = useState(collection.Description);
   const [color, setColor] = useState(collection.Color);
   const [imageURL, setImageURL] = useState<string | null>(collection.ImageURL || null);
-  const [imagePreview, setImagePreview] = useState<string | null>(collection.ImageURL || null);
+  const [imagePreview, setImagePreview] = useState<string | null>(resolveImageURL(collection.ImageURL));
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +48,7 @@ export default function EditCollectionModal({ collection, onClose, onUpdated, on
       setImageURL(url);
     } catch {
       setError("画像のアップロードに失敗しました");
-      setImagePreview(collection.ImageURL || null);
+      setImagePreview(resolveImageURL(collection.ImageURL));
     } finally {
       setUploading(false);
     }

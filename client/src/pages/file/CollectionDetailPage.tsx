@@ -8,6 +8,15 @@ import EditCollectionModal from "../../components/file/EditCollectionModal";
 import FileUploadButton from "../../components/file/FileUploadButton";
 import FileListPanel from "../../components/file/FileListPanel";
 
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+
+function resolveImageURL(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (url.startsWith("http")) return url;
+  if (url.startsWith("/v1/") || url.startsWith("/")) return `${BASE_URL}${url}`;
+  return `${BASE_URL}/v1/files/${encodeURIComponent(url)}`;
+}
+
 export default function CollectionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -55,7 +64,7 @@ export default function CollectionDetailPage() {
           }}
         >
           {collection.ImageURL ? (
-            <img src={collection.ImageURL} alt={collection.Name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <img src={resolveImageURL(collection.ImageURL)!} alt={collection.Name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           ) : (
             <Icon name={collection.Icon || "folder"} size={60} style={{ color: C.onSurfaceVariant }} />
           )}
