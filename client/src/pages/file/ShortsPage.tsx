@@ -195,9 +195,7 @@ function ShortsPlayer({ videos, onBack }: { videos: VideoFile[]; onBack: () => v
   const curSlotRef = useRef(0);
   useEffect(() => { curSlotRef.current = curSlot; }, [curSlot]);
 
-  // スロットの役割: (slot - curSlot + 3) % 3 → 0=current, 1=next, 2=prev
-  const nextSlot = (curSlot + 1) % 3;
-  const prevSlot = (curSlot + 2) % 3;
+
 
   // 動画要素 ref（スロットごとに固定）
   const vRef0 = useRef<HTMLVideoElement>(null);
