@@ -35,12 +35,13 @@ func CreateCollection(database *sql.DB) gin.HandlerFunc {
 			Color       string `json:"color"`
 			Icon        string `json:"icon"`
 			ImageURL    string `json:"image_url"`
+			Genre       string `json:"genre"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request"})
 			return
 		}
-		col, err := db.CreateCollection(database, body.Name, body.Description, body.Color, body.Icon, body.ImageURL)
+		col, err := db.CreateCollection(database, body.Name, body.Description, body.Color, body.Icon, body.ImageURL, body.Genre)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_create_collection"})
 			return
@@ -93,12 +94,13 @@ func UpdateCollection(database *sql.DB) gin.HandlerFunc {
 			Color       string `json:"color"`
 			Icon        string `json:"icon"`
 			ImageURL    string `json:"image_url"`
+			Genre       string `json:"genre"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request"})
 			return
 		}
-		if err := db.UpdateCollection(database, id, body.Name, body.Description, body.Color, body.Icon, body.ImageURL); err != nil {
+		if err := db.UpdateCollection(database, id, body.Name, body.Description, body.Color, body.Icon, body.ImageURL, body.Genre); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_update_collection"})
 			return
 		}

@@ -265,15 +265,20 @@ function AccountCard() {
 // ─── サイドバーナビ設定 ────────────────────────────────────
 function SidebarNavCard() {
   const C = useColors();
-  const { items, setEnabled, reorder, reset } = useSidebarNav();
+  const { isAdmin } = useAuth();
+  const { items, storageDefaultTab, memberCanCustomize, canCustomize, setEnabled, reorder, setStorageDefaultTab, setMemberCanCustomize, reset } = useSidebarNav(isAdmin);
   const dragIndex = useRef<number | null>(null);
 
+  // メンバーかつカスタマイズ不可の場合は非表示
+  if (!isAdmin && !memberCanCustomize) return null;
+
   const handleDragStart = (index: number) => {
+    if (!canCustomize) return;
     dragIndex.current = index;
   };
   const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
-    if (dragIndex.current === null || dragIndex.current === index) return;
+    if (!canCustomize || dragIndex.current === null || dragIndex.current === index) return;
     reorder(dragIndex.current, index);
     dragIndex.current = index;
   };
@@ -282,13 +287,51 @@ function SidebarNavCard() {
   return (
     <Card icon="list" title="ナビゲーション" color="#34d399">
       <div style={{ paddingTop: 8, paddingBottom: 4, display: "flex", flexDirection: "column", gap: 2 }}>
-        <p style={{ margin: "0 0 10px", fontSize: 11, color: C.outline, fontWeight: 600 }}>
+        {!canCustomize && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8,
+            padding: "8px 12px", borderRadius: 10, marginBottom: 8,
+            background: `${C.outlineVariant}18`,
+            border: `1px solid ${C.outlineVariant}33`,
+          }}>
+            <Icon name="lock" size={14} style={{ color: C.outlineVariant }} />
+            <p style={{ margin: 0, fontSize: 11, color: C.outline, fontWeight: 600 }}>
+              管理者のみ変更できます
+            </p>
+          </div>
+        )}
+
+        {/* 管理者のみ: memberカスタマイズ許可トグル */}
+        {isAdmin && (
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "8px 10px", borderRadius: 10, marginBottom: 8,
+            background: memberCanCustomize ? `${C.primary}0d` : `${C.surfaceVariant}55`,
+            border: `1px solid ${memberCanCustomize ? C.primary + "22" : C.outlineVariant + "22"}`,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Icon name="manage_accounts" size={15} style={{ color: memberCanCustomize ? C.primary : C.outlineVariant }} />
+              <div>
+                <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: C.onSurface }}>メンバーのカスタマイズを許可</p>
+                <p style={{ margin: 0, fontSize: 10, color: C.outline }}>ONにするとメンバーが自分のサイドバーを変更できます</p>
+              </div>
+            </div>
+            <Toggle checked={memberCanCustomize} onChange={(v) => setMemberCanCustomize(v)} />
+          </div>
+        )}
+
+        <p style={{ margin: "0 0 6px", fontSize: 11, color: C.outline, fontWeight: 600 }}>
           PC サイドバー・スマホメニュー共通
         </p>
+        <p style={{ margin: "0 0 10px", fontSize: 10, color: `${C.outline}88` }}>
+          <Icon name="home_pin" size={12} style={{ verticalAlign: "middle", marginRight: 4 }} />
+          チェックマークで Storage を開いたときのデフォルトタブを設定（管理者のみ）
+        </p>
+
         {items.map((item, i) => (
           <div
             key={item.id}
-            draggable
+            draggable={canCustomize}
             onDragStart={() => handleDragStart(i)}
             onDragOver={(e) => handleDragOver(e, i)}
             onDragEnd={handleDragEnd}
@@ -297,19 +340,36 @@ function SidebarNavCard() {
               padding: "8px 10px", borderRadius: 10,
               background: item.enabled ? `${C.primary}0d` : C.surfaceVariant + "55",
               border: `1px solid ${item.enabled ? C.primary + "22" : C.outlineVariant + "22"}`,
-              cursor: "grab", userSelect: "none",
+              cursor: canCustomize ? "grab" : "default", userSelect: "none",
               transition: "background 0.15s",
               opacity: item.enabled ? 1 : 0.5,
             }}
           >
-            <Icon name="drag_indicator" size={16} style={{ color: C.outlineVariant, flexShrink: 0 }} />
+            <Icon name="drag_indicator" size={16} style={{ color: canCustomize ? C.outlineVariant : `${C.outlineVariant}33`, flexShrink: 0 }} />
             <Icon name={item.icon} size={16} style={{ color: item.enabled ? C.primary : C.outlineVariant, flexShrink: 0 }} />
             <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: item.enabled ? C.onSurface : C.outline }}>
               {item.label}
             </span>
-            <Toggle checked={item.enabled} onChange={(v) => setEnabled(item.id, v)} />
+            {/* デフォルトタブ チェック（管理者のみ） */}
+            {isAdmin && (
+              <button
+                onClick={() => setStorageDefaultTab(item.to)}
+                title="デフォルトタブに設定"
+                style={{
+                  background: "none", border: "none", padding: "2px 4px",
+                  cursor: "pointer", display: "flex", alignItems: "center",
+                  color: storageDefaultTab === item.to ? C.primary : `${C.outlineVariant}66`,
+                  flexShrink: 0, borderRadius: 6,
+                  transition: "color 0.15s",
+                }}
+              >
+                <Icon name="home_pin" size={16} filled={storageDefaultTab === item.to} />
+              </button>
+            )}
+            <Toggle checked={item.enabled} onChange={(v) => canCustomize && setEnabled(item.id, v)} />
           </div>
         ))}
+
         <button
           onClick={reset}
           style={{
@@ -317,7 +377,7 @@ function SidebarNavCard() {
             border: `1px solid ${C.outlineVariant}44`,
             background: "transparent", color: C.outline,
             fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: F.family,
-            alignSelf: "flex-end",
+            alignSelf: "flex-end", display: canCustomize ? "block" : "none",
           }}
         >
           デフォルトに戻す

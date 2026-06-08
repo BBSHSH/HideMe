@@ -109,6 +109,11 @@ func migrate(db *sql.DB) error {
 			edited_at  DATETIME
 		);
 
+		CREATE TABLE IF NOT EXISTS app_settings (
+			key   TEXT PRIMARY KEY,
+			value TEXT NOT NULL DEFAULT ''
+		);
+
 		CREATE TABLE IF NOT EXISTS collection_files (
 			id             TEXT PRIMARY KEY,
 			collection_id  TEXT REFERENCES collections(id) ON DELETE CASCADE,
@@ -131,6 +136,7 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE chat_channels ADD COLUMN type TEXT NOT NULL DEFAULT 'text'`,
 		`ALTER TABLE collection_files ADD COLUMN view_count INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE collection_files ADD COLUMN display_name TEXT`,
+		`ALTER TABLE collections ADD COLUMN genre TEXT NOT NULL DEFAULT ''`,
 	} {
 		if _, err := db.Exec(ddl); err != nil {
 			if !isDuplicateColumn(err) {

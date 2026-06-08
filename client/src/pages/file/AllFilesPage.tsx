@@ -168,7 +168,7 @@ export default function AllFilesPage() {
           <section style={{ padding: `28px ${px}px` }}>
             <SectionHeader icon="collections_bookmark" title="Collections" iconColor="#f472b6" />
             <div style={{ marginTop: 14 }}>
-              <CollectionGrid horizontal />
+              <CollectionGrid horizontal sortable />
             </div>
           </section>
 

@@ -14,15 +14,16 @@ type Collection struct {
 	Color       string
 	Icon        string
 	ImageURL    string
+	Genre       string
 }
 
 var ErrCollectionNotFound = errors.New("collection not found")
 
-func CreateCollection(db *sql.DB, name, description, color, icon, imageURL string) (Collection, error) {
+func CreateCollection(db *sql.DB, name, description, color, icon, imageURL, genre string) (Collection, error) {
 	id := uuid.NewString()
 	_, err := db.Exec(
-		`INSERT INTO collections (id, name, description, color, icon, image_url) VALUES (?, ?, ?, ?, ?, ?)`,
-		id, name, description, color, icon, imageURL,
+		`INSERT INTO collections (id, name, description, color, icon, image_url, genre) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		id, name, description, color, icon, imageURL, genre,
 	)
 	if err != nil {
 		return Collection{}, err
@@ -33,8 +34,8 @@ func CreateCollection(db *sql.DB, name, description, color, icon, imageURL strin
 func GetCollectionByID(db *sql.DB, id string) (Collection, error) {
 	var c Collection
 	err := db.QueryRow(
-		`SELECT id, name, description, color, icon, image_url FROM collections WHERE id = ?`, id,
-	).Scan(&c.ID, &c.Name, &c.Description, &c.Color, &c.Icon, &c.ImageURL)
+		`SELECT id, name, description, color, icon, COALESCE(image_url,''), COALESCE(genre,'') FROM collections WHERE id = ?`, id,
+	).Scan(&c.ID, &c.Name, &c.Description, &c.Color, &c.Icon, &c.ImageURL, &c.Genre)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Collection{}, ErrCollectionNotFound
 	}
@@ -42,7 +43,7 @@ func GetCollectionByID(db *sql.DB, id string) (Collection, error) {
 }
 
 func ListCollections(db *sql.DB) ([]Collection, error) {
-	rows, err := db.Query(`SELECT id, name, description, color, icon, image_url FROM collections`)
+	rows, err := db.Query(`SELECT id, name, description, color, icon, COALESCE(image_url,''), COALESCE(genre,'') FROM collections`)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +52,7 @@ func ListCollections(db *sql.DB) ([]Collection, error) {
 	var collections []Collection
 	for rows.Next() {
 		var c Collection
-		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.Color, &c.Icon, &c.ImageURL); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.Color, &c.Icon, &c.ImageURL, &c.Genre); err != nil {
 			return nil, err
 		}
 		collections = append(collections, c)
@@ -59,10 +60,10 @@ func ListCollections(db *sql.DB) ([]Collection, error) {
 	return collections, rows.Err()
 }
 
-func UpdateCollection(db *sql.DB, id, name, description, color, icon, imageURL string) error {
+func UpdateCollection(db *sql.DB, id, name, description, color, icon, imageURL, genre string) error {
 	_, err := db.Exec(
-		`UPDATE collections SET name=?, description=?, color=?, icon=?, image_url=? WHERE id=?`,
-		name, description, color, icon, imageURL, id,
+		`UPDATE collections SET name=?, description=?, color=?, icon=?, image_url=?, genre=? WHERE id=?`,
+		name, description, color, icon, imageURL, genre, id,
 	)
 	return err
 }

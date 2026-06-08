@@ -10,6 +10,7 @@ export type CreateCollectionInput = {
   color?: string;
   icon?: string;
   image_url?: string;
+  genre?: string;
 };
 
 export async function getCollectionFiles(collectionId: string) {

@@ -6,6 +6,7 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import { useCollections } from "../hooks/useFiles";
 import UploadModal from "../components/file/UploadModal";
 import { useSidebarNav } from "../hooks/useSidebarNav";
+import { useAuth } from "../context/AuthContext";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -54,7 +55,7 @@ function SidebarLink({
         padding:        "12px 20px",
         borderRadius:   12,
         background:     isActive
-                          ? `${C.primaryContainer}33`
+                          ? "rgba(88,101,242,0.12)"
                           : hover
                           ? `${C.surfaceVariant}4d`
                           : "transparent",
@@ -65,6 +66,7 @@ function SidebarLink({
         textDecoration: "none",
         transition:     "all 0.2s",
         cursor:         "pointer",
+        boxShadow:      isActive ? "inset 3px 0 0 rgba(88,101,242,0.7)" : "none",
       })}
     >
       {({ isActive }) => (
@@ -126,8 +128,9 @@ function CollectionLink({ id, name, color }: { id: string; name: string; color: 
 export default function FileLayout() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { isAdmin } = useAuth();
   const { collections } = useCollections();
-  const { items: navItems } = useSidebarNav();
+  const { items: navItems } = useSidebarNav(isAdmin);
   const enabledNav = navItems.filter((i) => i.enabled);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showUpload,  setShowUpload]  = useState(false);

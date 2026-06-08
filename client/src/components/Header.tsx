@@ -1,5 +1,5 @@
-import { NavLink, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { NavLink, useNavigate, useLocation } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
 
 import { Icon } from "./Icon";
 import { C, F, glassPanel } from "../theme/tokens";
@@ -28,13 +28,28 @@ const PC_NAV_ITEMS: NavItem[] = [
 ];
 
 export default function Header({ onLogout }: HeaderProps) {
-  const { items: allMobileNavItems } = useSidebarNav();
+  const { user, isAdmin } = useAuth();
+  const { items: allMobileNavItems, storageDefaultTab } = useSidebarNav(isAdmin);
   const mobileNavItems = allMobileNavItems.filter((i) => i.enabled).map((i) => ({ id: i.id, icon: i.icon, label: i.label, path: i.to }));
-  const navItems = PC_NAV_ITEMS;
+  const navItems = PC_NAV_ITEMS.map((item) =>
+    item.id === "storage" ? { ...item, path: storageDefaultTab } : item
+  );
   const [showMenu,   setShowMenu]   = useState(false);
   const [showDrawer, setShowDrawer] = useState(false);
-  const { user, isAdmin } = useAuth();
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showMenu]);
   const navigate   = useNavigate();
+  const location   = useLocation();
   const isMobile   = useIsMobile();
 
   const HEADER_H = isMobile ? 56 : 72;
@@ -207,18 +222,26 @@ export default function Header({ onLogout }: HeaderProps) {
 
             {/* ナビ（中央） */}
             <nav style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              {navItems.map((item) => (
+              {navItems.map((item) => {
+                // Storage は /file/* 全体でアクティブ表示
+                const forceActive = item.id === "storage" && location.pathname.startsWith("/file");
+                return (
                 <NavLink key={item.id} to={item.path} end={item.path === "/"}
-                  style={({ isActive }) => ({
-                    position: "relative", display: "flex", flexDirection: "column",
-                    alignItems: "center", justifyContent: "center", gap: 4,
-                    padding: "8px 20px", borderRadius: 12, textDecoration: "none",
-                    color: isActive ? C.primary : C.onSurfaceVariant,
-                    background: isActive ? "rgba(88,101,242,0.12)" : "transparent",
-                    transition: "all .25s cubic-bezier(.22,1,.36,1)",
-                  })}
+                  style={({ isActive: routerActive }) => {
+                    const isActive = forceActive || routerActive;
+                    return {
+                      position: "relative", display: "flex", flexDirection: "column",
+                      alignItems: "center", justifyContent: "center", gap: 4,
+                      padding: "8px 20px", borderRadius: 12, textDecoration: "none",
+                      color: isActive ? C.primary : C.onSurfaceVariant,
+                      background: isActive ? "rgba(88,101,242,0.12)" : "transparent",
+                      transition: "all .25s cubic-bezier(.22,1,.36,1)",
+                    };
+                  }}
                 >
-                  {({ isActive }) => (
+                  {({ isActive: routerActive }) => {
+                    const isActive = forceActive || routerActive;
+                    return (
                     <>
                       <Icon name={item.icon} filled={isActive} size={26}
                         style={{
@@ -240,9 +263,9 @@ export default function Header({ onLogout }: HeaderProps) {
                         transition: "all .28s cubic-bezier(.22,1,.36,1)",
                       }} />
                     </>
-                  )}
+                  );}}
                 </NavLink>
-              ))}
+              );})}
             </nav>
 
             {/* アバター（右） */}
@@ -265,8 +288,7 @@ export default function Header({ onLogout }: HeaderProps) {
         {/* ── アカウントドロップダウン（共通） ── */}
         {showMenu && (
           <>
-            <div onClick={() => setShowMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 99 }} />
-            <div style={{
+            <div ref={menuRef} style={{
               position: "absolute", top: HEADER_H - 4, right: isMobile ? 12 : 24,
               minWidth: 210,
               background: "rgba(22,23,34,0.97)", backdropFilter: "blur(20px)",

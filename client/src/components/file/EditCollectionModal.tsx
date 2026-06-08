@@ -4,6 +4,14 @@ import { Icon } from "../Icon";
 import { updateCollection, deleteCollection, uploadCollectionImage } from "../../api/collections";
 import type { Collection } from "../../data/files";
 
+const GENRES = [
+  { value: "", label: "すべて", icon: "apps" },
+  { value: "video", label: "動画", icon: "movie" },
+  { value: "image", label: "画像", icon: "image" },
+  { value: "audio", label: "音楽", icon: "music_note" },
+  { value: "document", label: "書類", icon: "description" },
+] as const;
+
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
 function resolveImageURL(url: string | null | undefined): string | null {
@@ -28,6 +36,7 @@ export default function EditCollectionModal({ collection, onClose, onUpdated, on
   const [name, setName] = useState(collection.Name);
   const [description, setDescription] = useState(collection.Description);
   const [color, setColor] = useState(collection.Color);
+  const [genre, setGenre] = useState(collection.Genre || "");
   const [imageURL, setImageURL] = useState<string | null>(collection.ImageURL || null);
   const [imagePreview, setImagePreview] = useState<string | null>(resolveImageURL(collection.ImageURL));
   const [uploading, setUploading] = useState(false);
@@ -65,6 +74,7 @@ export default function EditCollectionModal({ collection, onClose, onUpdated, on
         color,
         icon: "folder",
         image_url: imageURL ?? undefined,
+        genre,
       });
       onUpdated();
       onClose();
@@ -304,6 +314,34 @@ export default function EditCollectionModal({ collection, onClose, onUpdated, on
               outline: "none",
             }}
           />
+        </div>
+
+        {/* Genre */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <label style={{ fontSize: 13, fontWeight: 700, color: C.outlineVariant, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            ジャンル
+          </label>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {GENRES.map((g) => (
+              <button
+                key={g.value}
+                onClick={() => setGenre(g.value)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "6px 14px",
+                  borderRadius: 20,
+                  border: `1.5px solid ${genre === g.value ? color : `${C.outlineVariant}44`}`,
+                  background: genre === g.value ? `${color}22` : "transparent",
+                  color: genre === g.value ? color : C.onSurfaceVariant,
+                  fontSize: 13, fontWeight: 600, cursor: "pointer",
+                  fontFamily: F.family, transition: "all 0.15s",
+                }}
+              >
+                <Icon name={g.icon} size={16} />
+                {g.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Color */}

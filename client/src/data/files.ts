@@ -5,6 +5,7 @@ export type Collection = {
   Color: string;
   Icon: string;
   ImageURL?: string;
+  Genre?: string;
 };
 export type CollectionFile = {
   id: string;

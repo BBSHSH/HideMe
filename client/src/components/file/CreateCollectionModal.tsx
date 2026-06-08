@@ -3,6 +3,14 @@ import { C, F } from "../../theme/tokens";
 import { Icon } from "../Icon";
 import { createCollection, uploadCollectionImage } from "../../api/collections";
 
+const GENRES = [
+  { value: "", label: "すべて", icon: "apps" },
+  { value: "video", label: "動画", icon: "movie" },
+  { value: "image", label: "画像", icon: "image" },
+  { value: "audio", label: "音楽", icon: "music_note" },
+  { value: "document", label: "書類", icon: "description" },
+] as const;
+
 const PRESET_COLORS = [
   "#bec2ff", "#ffb689", "#e3e1ed", "#f28b82", "#81c995", "#78d9ec",
 ];
@@ -17,6 +25,7 @@ export default function CreateCollectionModal({ onClose, onCreated }: Props) {
   const [description, _setDescription] = useState("");
   const [color, setColor] = useState(PRESET_COLORS[0]);
   const [icon] = useState("folder");
+  const [genre, setGenre] = useState("");
   const [imageURL, setImageURL] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -60,6 +69,7 @@ export default function CreateCollectionModal({ onClose, onCreated }: Props) {
         color,
         icon,
         image_url: imageURL ?? undefined,
+        genre,
       });
       onCreated();
       onClose();
@@ -203,6 +213,34 @@ export default function CreateCollectionModal({ onClose, onCreated }: Props) {
               outline: "none",
             }}
           />
+        </div>
+
+        {/* Genre */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <label style={{ fontSize: 13, fontWeight: 700, color: C.outlineVariant, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            ジャンル
+          </label>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {GENRES.map((g) => (
+              <button
+                key={g.value}
+                onClick={() => setGenre(g.value)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "6px 14px",
+                  borderRadius: 20,
+                  border: `1.5px solid ${genre === g.value ? color : `${C.outlineVariant}44`}`,
+                  background: genre === g.value ? `${color}22` : "transparent",
+                  color: genre === g.value ? color : C.onSurfaceVariant,
+                  fontSize: 13, fontWeight: 600, cursor: "pointer",
+                  fontFamily: F.family, transition: "all 0.15s",
+                }}
+              >
+                <Icon name={g.icon} size={16} />
+                {g.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Color */}
