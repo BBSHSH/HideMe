@@ -178,7 +178,6 @@ export default function VideoFilesPage() {
 
   const filtered = activeCol === "all" ? allVideos : allVideos.filter(v => v.collection_id === activeCol);
   const px = isMobile ? 16 : 28;
-  const cols = isMobile ? 2 : 5;
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -240,7 +239,7 @@ export default function VideoFilesPage() {
         ) : (
           <div style={{
             display: "grid",
-            gridTemplateColumns: `repeat(${cols}, 1fr)`,
+            gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fill, minmax(200px, 1fr))",
             gap: 14,
             padding: `20px ${px}px 48px`,
           }}>

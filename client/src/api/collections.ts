@@ -96,6 +96,27 @@ export const deleteCollectionFile = (collectionId: string, fileId: string): Prom
   });
 };
 
+export const updateCollectionFile = async (
+  collectionId: string,
+  fileId: string,
+  params: { displayName: string; collectionId: string; thumbnail?: File }
+): Promise<void> => {
+  const form = new FormData();
+  form.append("display_name", params.displayName);
+  form.append("collection_id", params.collectionId);
+  if (params.thumbnail) form.append("thumbnail", params.thumbnail);
+
+  const res = await fetch(
+    `${import.meta.env.VITE_API_BASE_URL ?? ""}/v1/collections/${collectionId}/files/${fileId}`,
+    {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${JSON.parse(localStorage.getItem("hideme_auth") || "{}").token}` },
+      body: form,
+    }
+  );
+  if (!res.ok) throw new Error(`Update failed: ${res.status}`);
+};
+
 export const uploadCollectionImage = async (file: File): Promise<string> => {
   const form = new FormData();
   form.append("file", file);

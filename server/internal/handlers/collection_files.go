@@ -25,6 +25,7 @@ import (
 	"github.com/BBSHSH/HideMe/server/internal/progress"
 	"github.com/BBSHSH/HideMe/server/internal/storage"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 func ffmpegPath() string {
@@ -481,6 +482,64 @@ func uploadNonVideoFromReader(c *gin.Context, store storage.Storage, database *s
 	}
 
 	c.JSON(http.StatusCreated, cf)
+}
+
+// PatchCollectionFile はファイルのメタデータ（表示名・サムネイル・コレクション）を更新する
+func PatchCollectionFile(database *sql.DB, storeFor StoreSelector, storageType string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		fileID := c.Param("fileID")
+
+		cf, err := db.GetFileByID(database, fileID)
+		if err != nil {
+			if errors.Is(err, db.ErrFileNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "file_not_found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_get_file"})
+			return
+		}
+
+		claims, ok := c.Get(middleware.ClaimsKey)
+		if !ok || claims == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+		cl := claims.(*auth.Claims)
+		if cl.Role != "admin" && (cf.UploadedBy == "" || cl.UserID != cf.UploadedBy) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+
+		displayName := c.PostForm("display_name")
+		newCollectionID := c.PostForm("collection_id")
+		if newCollectionID == "" {
+			newCollectionID = cf.CollectionID
+		}
+		thumbnailName := cf.ThumbnailName
+
+		// サムネイル画像が送られてきた場合はアップロード
+		if thumbFile, err := c.FormFile("thumbnail"); err == nil {
+			ts, err := thumbFile.Open()
+			if err == nil {
+				defer ts.Close()
+				store := storeFor(storageType)
+				thumbPath := "thumbnails/" + uuid.NewString() + filepath.Ext(thumbFile.Filename)
+				if _, err := store.Upload(c.Request.Context(), thumbPath, ts, thumbFile.Size); err == nil {
+					// 旧サムネイルを削除
+					if cf.ThumbnailName != "" {
+						_ = store.Delete(c.Request.Context(), cf.ThumbnailName)
+					}
+					thumbnailName = thumbPath
+				}
+			}
+		}
+
+		if err := db.UpdateCollectionFile(database, fileID, displayName, thumbnailName, newCollectionID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_update"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"updated": true})
+	}
 }
 
 func DeleteCollectionFile(database *sql.DB, storeFor StoreSelector) gin.HandlerFunc {

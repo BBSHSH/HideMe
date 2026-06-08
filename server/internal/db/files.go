@@ -24,6 +24,7 @@ type CollectionFileWithUploader struct {
 	ID             string    `json:"id"`
 	CollectionID   string    `json:"collection_id"`
 	FileName       string    `json:"file_name"`
+	DisplayName    string    `json:"display_name"`
 	FileSize       int64     `json:"file_size"`
 	ThumbnailName  string    `json:"thumbnail_name"`
 	StorageType    string    `json:"storage_type"` // "nas" or "local"
@@ -71,6 +72,7 @@ func ListFilesByCollectionWithUploader(db *sql.DB, collectionID string) ([]Colle
 			cf.id,
 			cf.collection_id,
 			cf.file_name,
+			COALESCE(cf.display_name, '')    AS display_name,
 			cf.file_size,
 			COALESCE(cf.thumbnail_name, '')  AS thumbnail_name,
 			COALESCE(cf.storage_type, 'nas') AS storage_type,
@@ -96,7 +98,7 @@ func ListFilesByCollectionWithUploader(db *sql.DB, collectionID string) ([]Colle
 		var f CollectionFileWithUploader
 		var discordID string
 		if err := rows.Scan(
-			&f.ID, &f.CollectionID, &f.FileName, &f.FileSize,
+			&f.ID, &f.CollectionID, &f.FileName, &f.DisplayName, &f.FileSize,
 			&f.ThumbnailName, &f.StorageType, &f.UploadedBy, &f.UploadedAt,
 			&f.UploaderName, &f.UploaderAvatar, &discordID, &f.ViewCount,
 		); err != nil {
@@ -161,6 +163,14 @@ func ListRecentFiles(db *sql.DB, limit int) ([]CollectionFile, error) {
 		files = append(files, f)
 	}
 	return files, rows.Err()
+}
+
+func UpdateCollectionFile(db *sql.DB, fileID, displayName, thumbnailName, collectionID string) error {
+	_, err := db.Exec(
+		`UPDATE collection_files SET display_name = ?, thumbnail_name = ?, collection_id = ? WHERE id = ?`,
+		displayName, thumbnailName, collectionID, fileID,
+	)
+	return err
 }
 
 func DeleteFileFromCollection(db *sql.DB, id string) error {

@@ -126,6 +126,7 @@ func main() {
 	api.POST("/collections/:id/files", middleware.RequireAuth(), handlers.UploadToCollection(store, database, cfg.Storage.Type))
 	api.POST("/collections/:id/chunk", middleware.RequireAuth(), handlers.UploadChunk())
 	api.POST("/collections/:id/merge", middleware.RequireAuth(), handlers.MergeAndUpload(store, database, cfg.Storage.Type))
+	api.PATCH("/collections/:id/files/:fileID", middleware.RequireAuth(), handlers.PatchCollectionFile(database, storeFor, cfg.Storage.Type))
 	api.DELETE("/collections/:id/files/:fileID", middleware.RequireAuth(), handlers.DeleteCollectionFile(database, storeFor))
 	api.POST("/collections/:id/files/:fileID/view", middleware.RequireAuth(), handlers.RecordView(database))
 

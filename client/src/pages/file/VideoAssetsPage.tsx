@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { C, F } from "../../theme/tokens";
 import { Icon } from "../../components/Icon";
-import { getCollectionFiles, deleteCollectionFile, recordView } from "../../api/collections";
+import { getCollectionFiles, deleteCollectionFile, recordView, updateCollectionFile } from "../../api/collections";
 import { useCollections } from "../../hooks/useFiles";
 import { useAuth } from "../../context/AuthContext";
 import { formatBytes, formatRelativeTime } from "../../utils/format";
@@ -15,6 +15,7 @@ interface CollectionFile {
   id: string;
   collection_id: string;
   file_name: string;
+  display_name?: string;
   file_size: number;
   thumbnail_name: string;
   uploaded_at: string;
@@ -76,6 +77,178 @@ function RelatedClip({ file }: { file: CollectionFile }) {
   );
 }
 
+// ─── EditFileModal ────────────────────────────────────────────────────────────
+function EditFileModal({
+  file,
+  collectionId,
+  collections,
+  onClose,
+  onSaved,
+}: {
+  file: CollectionFile;
+  collectionId: string;
+  collections: { ID: string; Name: string }[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [displayName, setDisplayName] = useState(file.display_name || file.file_name.replace(/\.[^.]+$/, ""));
+  const [selectedCollectionId, setSelectedCollectionId] = useState(collectionId);
+  const [thumbnail, setThumbnail] = useState<File | null>(null);
+  const [thumbPreview, setThumbPreview] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const thumbInputRef = useRef<HTMLInputElement>(null);
+
+  const handleThumbChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setThumbnail(f);
+    const url = URL.createObjectURL(f);
+    setThumbPreview(url);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateCollectionFile(collectionId, file.id, {
+        displayName,
+        collectionId: selectedCollectionId,
+        thumbnail: thumbnail ?? undefined,
+      });
+      onSaved();
+    } catch {
+      alert("保存に失敗しました");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%", padding: "9px 12px",
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: 8, color: C.onSurface,
+    fontSize: 13, fontFamily: F.family, boxSizing: "border-box",
+    outline: "none",
+  };
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 200, backdropFilter: "blur(4px)" }} />
+      <div style={{
+        position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+        zIndex: 201, width: 420, maxWidth: "calc(100vw - 32px)",
+        background: "#1a1b24", border: "1px solid rgba(255,255,255,0.08)",
+        borderRadius: 16, padding: 24, display: "flex", flexDirection: "column", gap: 18,
+        boxShadow: "0 24px 80px rgba(0,0,0,0.7)",
+      }}>
+        {/* ヘッダー */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: C.onSurface, fontFamily: F.family }}>
+            動画を編集
+          </h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: C.onSurfaceVariant, display: "flex" }}>
+            <Icon name="close" size={20} />
+          </button>
+        </div>
+
+        {/* 表示名 */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            表示名
+          </label>
+          <input
+            value={displayName}
+            onChange={e => setDisplayName(e.target.value)}
+            style={inputStyle}
+            placeholder="動画の表示名"
+          />
+        </div>
+
+        {/* コレクション */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            コレクション
+          </label>
+          <select
+            value={selectedCollectionId}
+            onChange={e => setSelectedCollectionId(e.target.value)}
+            style={{ ...inputStyle, cursor: "pointer" }}
+          >
+            {collections.map(col => (
+              <option key={col.ID} value={col.ID} style={{ background: "#1a1b24" }}>
+                {col.Name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* サムネイル */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            サムネイル
+          </label>
+          <input ref={thumbInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleThumbChange} />
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{
+              width: 80, height: 50, borderRadius: 6, overflow: "hidden",
+              background: "#000", border: "1px solid rgba(255,255,255,0.1)", flexShrink: 0,
+            }}>
+              {thumbPreview ? (
+                <img src={thumbPreview} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : file.thumbnail_name ? (
+                <img
+                  src={`${import.meta.env.VITE_API_BASE_URL ?? ""}/v1/files/${encodeURIComponent(file.thumbnail_name)}`}
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
+              ) : (
+                <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Icon name="image" size={20} style={{ color: C.outlineVariant }} />
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => thumbInputRef.current?.click()}
+              style={{
+                padding: "7px 14px", borderRadius: 8, cursor: "pointer",
+                background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
+                color: C.onSurface, fontSize: 12, fontWeight: 600,
+              }}
+            >
+              画像を選択
+            </button>
+          </div>
+        </div>
+
+        {/* 保存ボタン */}
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
+          <button
+            onClick={onClose}
+            style={{
+              padding: "9px 20px", borderRadius: 8, cursor: "pointer",
+              background: "transparent", border: "1px solid rgba(255,255,255,0.1)",
+              color: C.onSurfaceVariant, fontSize: 13, fontWeight: 600,
+            }}
+          >
+            キャンセル
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            style={{
+              padding: "9px 24px", borderRadius: 8, cursor: saving ? "not-allowed" : "pointer",
+              background: "linear-gradient(135deg, #5865f2, #7c3aed)",
+              border: "none", color: "#fff", fontSize: 13, fontWeight: 700,
+              opacity: saving ? 0.6 : 1,
+            }}
+          >
+            {saving ? "保存中..." : "保存"}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── VideoAssetsPage ──────────────────────────────────────────────────────────
 export default function VideoAssetsPage() {
   const params = useParams<{ fileId: string }>();
@@ -86,6 +259,8 @@ export default function VideoAssetsPage() {
   const [currentCollectionId, setCurrentCollectionId] = useState("");
   const [relatedFiles, setRelatedFiles] = useState<CollectionFile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showEdit, setShowEdit] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const fileId = params.fileId;
 
   useEffect(() => {
@@ -124,7 +299,8 @@ export default function VideoAssetsPage() {
       }
     };
     if (fileId && collections.length > 0) fetchData();
-  }, [fileId, collections]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileId, collections, refreshKey]);
 
   const handleDownload = () => {
     const a = document.createElement("a");
@@ -144,17 +320,33 @@ export default function VideoAssetsPage() {
     }
   };
 
-  const canDelete = user?.role === "admin" || user?.userId === currentFile?.uploaded_by;
+  const canEdit = user?.role === "admin" || user?.userId === currentFile?.uploaded_by;
+  const canDelete = canEdit;
   const isMobile = useIsMobile();
+  const displayTitle = currentFile?.display_name || currentFile?.file_name.replace(/\.[^.]+$/, "") || "";
 
   if (loading) return <div style={{ padding: 48, textAlign: "center", color: C.outlineVariant }}>Loading...</div>;
   if (!currentFile) return <div style={{ padding: 48, textAlign: "center", color: "#f87171" }}>Video not found</div>;
+
+  const handleSaved = () => {
+    setShowEdit(false);
+    setRefreshKey(k => k + 1);
+  };
 
   return (
     <div style={{
       flex: 1, minHeight: 0, display: "flex", flexDirection: "column",
       overflow: "hidden", boxSizing: "border-box",
     }}>
+      {showEdit && (
+        <EditFileModal
+          file={currentFile}
+          collectionId={currentCollectionId}
+          collections={collections}
+          onClose={() => setShowEdit(false)}
+          onSaved={handleSaved}
+        />
+      )}
 
       {isMobile ? (
         /* ── モバイル: YouTube風縦レイアウト ── */
@@ -185,7 +377,7 @@ export default function VideoAssetsPage() {
                 margin: 0, fontSize: 16, fontWeight: 800, color: C.onSurface,
                 fontFamily: F.family, lineHeight: 1.35,
               }}>
-                {currentFile.file_name.replace(/\.[^.]+$/, "")}
+                {displayTitle}
               </h1>
             </div>
 
@@ -200,6 +392,7 @@ export default function VideoAssetsPage() {
             {/* アクション */}
             <div style={{ display: "flex", gap: 8 }}>
               <ActionBtn icon="download" label="DL" onClick={handleDownload} />
+              {canEdit && <ActionBtn icon="edit" label="編集" onClick={() => setShowEdit(true)} />}
               {canDelete && <ActionBtn icon="delete" label="削除" danger onClick={handleDelete} />}
             </div>
 
@@ -235,7 +428,7 @@ export default function VideoAssetsPage() {
                 margin: 0, fontSize: 18, fontWeight: 700, color: C.onSurface,
                 fontFamily: F.family, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
               }}>
-                {currentFile.file_name.replace(/\.[^.]+$/, "")}
+                {displayTitle}
               </h1>
             </div>
             <div style={{ display: "flex", gap: 24, alignItems: "center", flexShrink: 0 }}>
@@ -246,6 +439,7 @@ export default function VideoAssetsPage() {
             </div>
             <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
               <ActionBtn icon="download" label="ダウンロード" onClick={handleDownload} />
+              {canEdit && <ActionBtn icon="edit" label="編集" onClick={() => setShowEdit(true)} />}
               {canDelete && <ActionBtn icon="delete" label="削除" danger onClick={handleDelete} />}
             </div>
           </div>
