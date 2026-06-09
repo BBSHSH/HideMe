@@ -15,6 +15,7 @@ jobs:
           cd ~/hideme/HideMe
           git stash
           git pull origin main
+          cd client && npm ci && npm run build && cd ..
           cd server && go build -o ../api ./cmd/api && cd ..
           sudo systemctl restart hideme
           echo "Deploy complete"
