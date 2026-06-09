@@ -82,7 +82,7 @@ export default function AllFilesPage() {
           <div style={{
             position: "absolute", inset: 0, pointerEvents: "none",
             background: "radial-gradient(ellipse 80% 100% at 60% -20%, rgba(88,101,242,0.18) 0%, transparent 70%)",
-          }} />aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          }} />
           <div style={{
             position: "absolute", top: -60, right: -60,
             width: 320, height: 320, borderRadius: "50%",
@@ -105,7 +105,7 @@ export default function AllFilesPage() {
                 <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(190,194,255,0.6)",
                   letterSpacing: "0.12em", textTransform: "uppercase", fontFamily: F.family }}>
                   Storage
-                </span>
+                </span>aaaaaaaaaaaaaaa
               </div>
 
               <h1 style={{
