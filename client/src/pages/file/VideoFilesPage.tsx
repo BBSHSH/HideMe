@@ -125,7 +125,7 @@ function VideoCard({ video, duration, onPlay }: { video: VideoFile; duration?: s
             lineHeight: 1.3, transition: "color 0.15s",
             overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
           }}>
-            {(video.display_name || video.file_name).replace(/\.[^.]+$/, "")}
+            {video.display_name ? video.display_name : video.file_name.replace(/\.[^.]+$/, "")}
           </p>
           <p style={{ margin: "2px 0 0", fontSize: 11, color: C.onSurfaceVariant }}>
             {video.uploader_name || "Unknown"}
