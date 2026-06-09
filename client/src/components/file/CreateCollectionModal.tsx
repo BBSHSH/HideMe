@@ -188,7 +188,7 @@ export default function CreateCollectionModal({ onClose, onCreated }: Props) {
             ref={fileInputRef}
             type="file"
             accept=".jpg,.jpeg,.png,.webp,.gif"
-            style={{ display: "none" }}
+            style={{ position: "absolute", width: 0, height: 0, opacity: 0, overflow: "hidden" }}
             onChange={handleImageChange}
           />
         </div>

@@ -254,17 +254,18 @@ export default function Editor() {
         fontFamily: F.family, padding: isMobile ? "0 24px" : 0,
       }}>
         <input
+          id="editor-file-input"
           ref={fileInputRef}
           type="file"
           accept="video/*"
-          style={{ display: "none" }}
+          style={{ position: "absolute", width: 0, height: 0, opacity: 0, overflow: "hidden" }}
           onChange={(e) => {
             const f = e.target.files?.[0];
             if (f) navigate("/editor", { state: { file: f, collectionId: state?.collectionId }, replace: true });
           }}
         />
-        <div
-          onClick={() => fileInputRef.current?.click()}
+        <label
+          htmlFor="editor-file-input"
           style={{
             display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
             padding: isMobile ? "40px 32px" : "48px 64px", borderRadius: 20, cursor: "pointer",
@@ -278,7 +279,7 @@ export default function Editor() {
             <p style={{ margin: 0, fontSize: isMobile ? 15 : 16, fontWeight: 700, color: C.onSurface }}>動画ファイルを選択</p>
             <p style={{ margin: "6px 0 0", fontSize: 12, color: C.outlineVariant }}>タップしてファイルを開く</p>
           </div>
-        </div>
+        </label>
         <button onClick={handleBack} style={{
           padding: "8px 20px", borderRadius: 10,
           border: `1px solid ${C.outlineVariant}44`,

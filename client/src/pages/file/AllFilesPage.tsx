@@ -59,7 +59,7 @@ export default function AllFilesPage() {
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <input ref={fileInputRef} type="file" style={{ display: "none" }} onChange={handleFileSelect} />
+      <input ref={fileInputRef} type="file" style={{ position: "absolute", width: 0, height: 0, opacity: 0, overflow: "hidden" }} onChange={handleFileSelect} />
 
       {showUpload && (
         <UploadModal

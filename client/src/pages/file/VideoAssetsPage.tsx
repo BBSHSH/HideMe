@@ -187,7 +187,7 @@ function EditFileModal({
           <label style={{ fontSize: 11, fontWeight: 700, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.08em" }}>
             サムネイル
           </label>
-          <input ref={thumbInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleThumbChange} />
+          <input ref={thumbInputRef} type="file" accept="image/*" style={{ position: "absolute", width: 0, height: 0, opacity: 0, overflow: "hidden" }} onChange={handleThumbChange} />
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{
               width: 80, height: 50, borderRadius: 6, overflow: "hidden",

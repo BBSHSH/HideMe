@@ -150,7 +150,7 @@ export default function UploadModal({ onClose, onUploaded, initialFile }: Upload
           <input
             ref={fileInputRef}
             type="file"
-            style={{ display: "none" }}
+            style={{ position: "absolute", width: 0, height: 0, opacity: 0, overflow: "hidden" }}
             onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); }}
           />
           {selectedFile ? (

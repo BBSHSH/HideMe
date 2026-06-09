@@ -177,7 +177,7 @@ export default function FileUploadButton({
         type="file"
         accept={acceptAttr}
         onChange={handleFileChange}
-        style={{ display: "none" }}
+        style={{ position: "absolute", width: 0, height: 0, opacity: 0, overflow: "hidden" }}
       />
     </div>
   );
