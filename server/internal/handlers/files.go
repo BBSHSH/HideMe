@@ -45,6 +45,7 @@ type RecentFileItem struct {
 	CollectionID   string `json:"collection_id"`
 	CollectionName string `json:"collection_name"`
 	FileName       string `json:"file_name"`
+	DisplayName    string `json:"display_name"`
 	FileSize       int64  `json:"file_size"`
 	ThumbnailName  string `json:"thumbnail_name"`
 	UploadedBy     string `json:"uploaded_by"`
@@ -60,7 +61,7 @@ func ListAllFiles(database *sql.DB) gin.HandlerFunc {
 		// collection_id が NULL / 空のレコードはコレクションに属さない孤立レコードのため除外
 		rows, err := database.Query(`
 			SELECT cf.id, cf.collection_id, COALESCE(col.name,'') AS collection_name,
-			       cf.file_name, cf.file_size,
+			       cf.file_name, COALESCE(cf.display_name,'') AS display_name, cf.file_size,
 			       COALESCE(cf.thumbnail_name,''),
 			       COALESCE(cf.uploaded_by,''),
 			       COALESCE(u.username, du.username, '') AS uploader_name,
@@ -87,7 +88,7 @@ func ListAllFiles(database *sql.DB) gin.HandlerFunc {
 		for rows.Next() {
 			var f RecentFileItem
 			if err := rows.Scan(&f.ID, &f.CollectionID, &f.CollectionName,
-				&f.FileName, &f.FileSize, &f.ThumbnailName,
+				&f.FileName, &f.DisplayName, &f.FileSize, &f.ThumbnailName,
 				&f.UploadedBy, &f.UploaderName, &f.UploaderAvatar,
 				&f.UploadedAt, &f.ViewCount); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_scan_files"})
