@@ -79,11 +79,10 @@ export default function ShortsPage() {
 
 // ── ビデオのオーバーレイUI（動画要素なし）────────────────────────────────────
 function VideoOverlay({
-  video, muted, playing, onTogglePlay, onToggleMute, onNext, onPrev, showPrev,
+  video, muted, playing, onTogglePlay, onToggleMute,
 }: {
   video: VideoFile; muted: boolean; playing: boolean;
   onTogglePlay: () => void; onToggleMute: () => void;
-  onNext: () => void; onPrev: () => void; showPrev: boolean;
 }) {
   const navigate = useNavigate();
   return (
@@ -457,9 +456,6 @@ function ShortsPlayer({ videos, onBack }: { videos: VideoFile[]; onBack: () => v
                   playing={isCurrent ? playing : true}
                   onTogglePlay={togglePlay}
                   onToggleMute={toggleMute}
-                  onNext={goNext}
-                  onPrev={goPrev}
-                  showPrev={qIdx > 0}
                 />
               )}
             </div>
