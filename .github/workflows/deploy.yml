@@ -17,4 +17,4 @@ jobs:
           git pull origin main
           cd server && go build -o ../api ./cmd/api && cd ..
           sudo systemctl restart hideme
-          echo "Deploy complete""
+          echo "Deploy complete"
