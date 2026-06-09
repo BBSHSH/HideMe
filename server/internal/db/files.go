@@ -56,7 +56,7 @@ func GetFileByID(db *sql.DB, id string) (CollectionFile, error) {
 	var f CollectionFile
 	err := db.QueryRow(
 		`SELECT id, collection_id, file_name, file_size,
-		        COALESCE(thumbnail_name,''), COALESCE(storage_type,'nas'), uploaded_by, uploaded_at
+		        COALESCE(thumbnail_name,''), COALESCE(storage_type,'nas'), COALESCE(uploaded_by,''), uploaded_at
 		 FROM collection_files WHERE id = ?`, id,
 	).Scan(&f.ID, &f.CollectionID, &f.FileName, &f.FileSize, &f.ThumbnailName, &f.StorageType, &f.UploadedBy, &f.UploadedAt)
 	if errors.Is(err, sql.ErrNoRows) {
