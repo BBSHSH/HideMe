@@ -564,6 +564,7 @@ func DeleteCollectionFile(database *sql.DB, storeFor StoreSelector) gin.HandlerF
 			return
 		}
 		cl := claims.(*auth.Claims)
+		log.Printf("[DELETE] fileID=%s role=%s userID=%s uploadedBy=%s", fileID, cl.Role, cl.UserID, cf.UploadedBy)
 		if cl.Role != "admin" {
 			if cf.UploadedBy == "" || cl.UserID != cf.UploadedBy {
 				c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
@@ -572,6 +573,7 @@ func DeleteCollectionFile(database *sql.DB, storeFor StoreSelector) gin.HandlerF
 		}
 
 		if err := db.DeleteFileFromCollection(database, fileID); err != nil {
+			log.Printf("[ERROR] DeleteCollectionFile db: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_delete_file"})
 			return
 		}
