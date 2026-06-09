@@ -32,6 +32,7 @@ async function fetchDuration(fileName: string): Promise<string> {
 interface VideoFile {
   id: string;
   file_name: string;
+  display_name?: string;
   file_size: number;
   thumbnail_name: string;
   uploaded_at: string;
@@ -124,7 +125,7 @@ function VideoCard({ video, duration, onPlay }: { video: VideoFile; duration?: s
             lineHeight: 1.3, transition: "color 0.15s",
             overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
           }}>
-            {video.file_name.replace(/\.[^.]+$/, "")}
+            {(video.display_name || video.file_name).replace(/\.[^.]+$/, "")}
           </p>
           <p style={{ margin: "2px 0 0", fontSize: 11, color: C.onSurfaceVariant }}>
             {video.uploader_name || "Unknown"}
