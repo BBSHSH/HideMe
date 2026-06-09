@@ -129,9 +129,24 @@ export function useSidebarNav(isAdmin = false) {
       if (serverSettings) setSettings({ ...serverSettings });
     };
     listeners.add(update);
-    // キャッシュの有無に関わらず常にサーバーから最新を取得
-    fetchAppSettings().then(update);
-    return () => { listeners.delete(update); };
+
+    // マウント時に必ずサーバーから最新を取得
+    const refetch = () => {
+      fetchPromise = null; // キャッシュを無効化して強制再取得
+      fetchAppSettings().then(update);
+    };
+    refetch();
+
+    // タブが再表示されたときも再取得（別デバイスや別タブでの変更を反映）
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refetch();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      listeners.delete(update);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   const canCustomize = isAdmin || settings.memberCanCustomize;

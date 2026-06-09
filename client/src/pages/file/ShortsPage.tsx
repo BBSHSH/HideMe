@@ -79,12 +79,15 @@ export default function ShortsPage() {
 
 // ── ビデオのオーバーレイUI（動画要素なし）────────────────────────────────────
 function VideoOverlay({
-  video, muted, playing, onTogglePlay, onToggleMute,
+  video, muted, volume, playing, onTogglePlay, onToggleMute, onVolumeChange,
 }: {
-  video: VideoFile; muted: boolean; playing: boolean;
+  video: VideoFile; muted: boolean; volume: number; playing: boolean;
   onTogglePlay: () => void; onToggleMute: () => void;
+  onVolumeChange: (v: number) => void;
 }) {
   const navigate = useNavigate();
+  const [showVolume, setShowVolume] = useState(false);
+
   return (
     <>
       {!playing && (
@@ -99,12 +102,39 @@ function VideoOverlay({
       {/* 右サイドボタン */}
       <div style={{ position: "absolute", right: 12, bottom: 120, display: "flex",
         flexDirection: "column", gap: 20, alignItems: "center", zIndex: 20 }}>
-        <button onClick={onToggleMute}
+
+        {/* 音量スライダー（縦） */}
+        {showVolume && (
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+              background: "rgba(0,0,0,0.65)", borderRadius: 20, padding: "10px 8px",
+            }}
+          >
+            <style>{`
+              .vol-slider { writing-mode: vertical-lr; direction: rtl; appearance: slider-vertical;
+                width: 4px; height: 80px; cursor: pointer; accent-color: #fff; }
+            `}</style>
+            <input
+              type="range" min={0} max={1} step={0.05}
+              value={muted ? 0 : volume}
+              onChange={e => onVolumeChange(Number(e.target.value))}
+              className="vol-slider"
+            />
+            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.7)", fontWeight: 700 }}>
+              {muted ? 0 : Math.round(volume * 100)}
+            </span>
+          </div>
+        )}
+
+        <button
+          onClick={e => { e.stopPropagation(); setShowVolume(v => !v); onToggleMute(); }}
           style={{ background: "rgba(0,0,0,0.5)", border: "none", borderRadius: "50%",
             width: 48, height: 48, cursor: "pointer", color: "#fff",
             display: "flex", alignItems: "center", justifyContent: "center" }}>
           <span className="material-symbols-outlined" style={{ fontSize: 22 }}>
-            {muted ? "volume_off" : "volume_up"}
+            {muted || volume === 0 ? "volume_off" : volume < 0.5 ? "volume_down" : "volume_up"}
           </span>
         </button>
         <button onClick={() => navigate(`/file/video/${video.id}`)}
@@ -186,6 +216,7 @@ function ShortsPlayer({ videos, onBack }: { videos: VideoFile[]; onBack: () => v
   const vRefs = [vRef0, vRef1, vRef2];
 
   const [muted, setMuted] = useState(false);
+  const [volume, setVolume] = useState(1);
   const [playing, setPlaying] = useState(true);
 
   // アニメーション状態
@@ -227,12 +258,14 @@ function ShortsPlayer({ videos, onBack }: { videos: VideoFile[]; onBack: () => v
     });
   }, [slotQIdx, queue]);
 
-  // muted 変更をカレントスロットにのみ反映（他はミュートのまま）
+  // muted / volume 変更をカレントスロットにのみ反映（他はミュートのまま）
   useEffect(() => {
     vRefs.forEach((r, i) => {
-      if (r.current) r.current.muted = i === curSlot ? muted : true;
+      if (!r.current) return;
+      r.current.muted = i === curSlot ? muted : true;
+      if (i === curSlot) r.current.volume = volume;
     });
-  }, [muted, curSlot]);
+  }, [muted, volume, curSlot]);
 
   // playing 変更をカレントスロットに反映
   useEffect(() => {
@@ -398,6 +431,14 @@ function ShortsPlayer({ videos, onBack }: { videos: VideoFile[]; onBack: () => v
 
   const togglePlay = () => setPlaying(p => !p);
   const toggleMute = () => setMuted(m => !m);
+  const handleVolumeChange = (v: number) => {
+    setVolume(v);
+    setMuted(v === 0);
+    vRefs.forEach((r, i) => {
+      if (!r.current) return;
+      if (i === curSlot) { r.current.volume = v; r.current.muted = v === 0; }
+    });
+  };
 
   // スロットの transform を計算
   // role: 0=current(0%), 1=next(100%), 2=prev(-100%)
@@ -453,9 +494,11 @@ function ShortsPlayer({ videos, onBack }: { videos: VideoFile[]; onBack: () => v
                 <VideoOverlay
                   video={video}
                   muted={muted}
+                  volume={volume}
                   playing={isCurrent ? playing : true}
                   onTogglePlay={togglePlay}
                   onToggleMute={toggleMute}
+                  onVolumeChange={handleVolumeChange}
                 />
               )}
             </div>

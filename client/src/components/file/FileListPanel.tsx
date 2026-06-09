@@ -35,6 +35,7 @@ interface FileRow {
   collection_id: string;
   collection_name: string;
   file_name: string;
+  display_name?: string;
   file_size: number;
   uploaded_by: string;
   uploader_name: string;
@@ -196,7 +197,7 @@ export default function FileListPanel({ collectionId, refreshKey }: FileListPane
                       maxWidth: "60vw",
                     }}
                   >
-                    {file.file_name}
+                    {file.display_name || file.file_name}
                   </h4>
                   <p style={{ margin: "3px 0 0", fontSize: 12, color: C.outline }}>
                     {formatBytes(file.file_size)}

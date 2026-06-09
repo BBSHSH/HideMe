@@ -18,6 +18,7 @@ interface RecentFile {
   collection_id: string;
   collection_name: string;
   file_name: string;
+  display_name?: string;
   file_size: number;
   thumbnail_name: string;
   uploaded_by: string;
@@ -93,7 +94,7 @@ export default function AllVideosGrid() {
   // VideoPlayerGrid が期待する VideoCardData 形式に変換
   const videoCards = files.map((f, i) => ({
     id: i,
-    title: f.file_name.replace(/\.[^.]+$/, ""),
+    title: (f.display_name || f.file_name).replace(/\.[^.]+$/, ""),
     channel: f.uploader_name || f.collection_name || "Unknown",
     views: formatBytes(f.file_size),
     time: formatRelativeTime(f.uploaded_at),

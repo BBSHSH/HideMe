@@ -35,6 +35,7 @@ interface FileItem {
   id: string;
   collection_id: string;
   file_name: string;
+  display_name?: string;
   file_size: number;
   thumbnail_name: string;
   uploaded_by: string;
@@ -138,7 +139,7 @@ function FileCard({ file, onDelete, onImageClick }: { file: FileItem; onDelete?:
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
         }}>
-          {file.file_name}
+          {file.display_name || file.file_name}
         </p>
         <p style={{ margin: "2px 0 0", fontSize: 10, color: C.outline }}>
           {formatBytes(file.file_size)}
