@@ -82,7 +82,7 @@ export default function AllFilesPage() {
           <div style={{
             position: "absolute", inset: 0, pointerEvents: "none",
             background: "radial-gradient(ellipse 80% 100% at 60% -20%, rgba(88,101,242,0.18) 0%, transparent 70%)",
-          }} />
+          }} />aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           <div style={{
             position: "absolute", top: -60, right: -60,
             width: 320, height: 320, borderRadius: "50%",
