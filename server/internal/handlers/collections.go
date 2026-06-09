@@ -20,6 +20,7 @@ func ListCollections(database *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		collections, err := db.ListCollections(database)
 		if err != nil {
+			log.Printf("[ERROR] ListCollections: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_list_collections"})
 			return
 		}
