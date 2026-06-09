@@ -29,8 +29,7 @@ const PC_NAV_ITEMS: NavItem[] = [
 
 export default function Header({ onLogout }: HeaderProps) {
   const { user, isAdmin } = useAuth();
-  const { items: allMobileNavItems, storageDefaultTab } = useSidebarNav(isAdmin);
-  const mobileNavItems = allMobileNavItems.filter((i) => i.enabled).map((i) => ({ id: i.id, icon: i.icon, label: i.label, path: i.to }));
+  const { storageDefaultTab } = useSidebarNav(isAdmin);
   const navItems = PC_NAV_ITEMS.map((item) =>
     item.id === "storage" ? { ...item, path: storageDefaultTab } : item
   );
@@ -90,27 +89,35 @@ export default function Header({ onLogout }: HeaderProps) {
 
             {/* ナビリンク */}
             <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4, padding: "12px 12px" }}>
-              {mobileNavItems.map((item) => (
+              {navItems.map((item) => {
+                const forceActive = item.id === "storage" && location.pathname.startsWith("/file");
+                return (
                 <NavLink key={item.id} to={item.path} end={item.path === "/"}
                   onClick={() => setShowDrawer(false)}
-                  style={({ isActive }) => ({
-                    display: "flex", alignItems: "center", gap: 14,
-                    padding: "11px 14px", borderRadius: 10, textDecoration: "none",
-                    color: isActive ? C.primary : C.onSurfaceVariant,
-                    background: isActive ? "rgba(88,101,242,0.12)" : "transparent",
-                    fontWeight: 700, fontSize: 14, fontFamily: F.family,
-                    transition: "all 0.15s",
-                  })}
+                  style={({ isActive: routerActive }) => {
+                    const isActive = forceActive || routerActive;
+                    return {
+                      display: "flex", alignItems: "center", gap: 14,
+                      padding: "11px 14px", borderRadius: 10, textDecoration: "none",
+                      color: isActive ? C.primary : C.onSurfaceVariant,
+                      background: isActive ? "rgba(88,101,242,0.12)" : "transparent",
+                      fontWeight: 700, fontSize: 14, fontFamily: F.family,
+                      transition: "all 0.15s",
+                    };
+                  }}
                 >
-                  {({ isActive }) => (
+                  {({ isActive: routerActive }) => {
+                    const isActive = forceActive || routerActive;
+                    return (
                     <>
                       <Icon name={item.icon} filled={isActive} size={20}
                         style={{ color: isActive ? C.primary : C.onSurfaceVariant }} />
                       {item.label}
                     </>
-                  )}
+                  );}}
                 </NavLink>
-              ))}
+              );})}
+
             </nav>
 
             {/* ユーザー情報 */}

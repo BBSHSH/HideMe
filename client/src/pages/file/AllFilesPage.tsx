@@ -105,7 +105,7 @@ export default function AllFilesPage() {
                 <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(190,194,255,0.6)",
                   letterSpacing: "0.12em", textTransform: "uppercase", fontFamily: F.family }}>
                   Storage
-                </span>aaaaaaaaaaaaaaa
+                </span>
               </div>
 
               <h1 style={{
