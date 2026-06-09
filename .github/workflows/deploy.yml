@@ -13,6 +13,7 @@ jobs:
       - name: Deploy
         run: |
           cd ~/hideme/HideMe
+          git stash
           git pull origin main
           cd server && go build -o ../api ./cmd/api && cd ..
           sudo systemctl restart hideme
