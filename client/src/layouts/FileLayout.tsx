@@ -127,8 +127,10 @@ function CollectionLink({ id, name, color }: { id: string; name: string; color: 
 // ─── FileLayout ───────────────────────────────────────────────────────────────
 export default function FileLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const isMobile = useIsMobile();
   const { isAdmin } = useAuth();
+  const isShorts = location.pathname === "/file/shorts";
   const { collections } = useCollections();
   const { items: navItems } = useSidebarNav(isAdmin);
   const enabledNav = navItems.filter((i) => i.enabled);
@@ -182,7 +184,7 @@ export default function FileLayout() {
       }}
     >
       {/* ── Sidebar (デスクトップ) / 上部タブナビ (モバイル) ── */}
-      {isMobile ? (
+      {isMobile && isShorts ? null : isMobile ? (
         /* モバイル: 上部スクロール可能タブ */
         <nav style={{
           display: "flex", flexShrink: 0, overflowX: "auto",

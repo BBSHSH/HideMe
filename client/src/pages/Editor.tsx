@@ -36,6 +36,7 @@ export default function Editor() {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
@@ -245,17 +246,6 @@ export default function Editor() {
   // ─── ファイルがない場合 ───
 
   if (!file) {
-    const pickFile = () => {
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = "video/*";
-      input.onchange = () => {
-        const f = input.files?.[0];
-        if (f) navigate("/editor", { state: { file: f, collectionId: state?.collectionId }, replace: true });
-      };
-      input.click();
-    };
-
     return (
       <div style={{
         height: isMobile ? "calc(100vh - 56px)" : "calc(100vh - 72px)",
@@ -263,8 +253,18 @@ export default function Editor() {
         flexDirection: "column", gap: 20,
         fontFamily: F.family, padding: isMobile ? "0 24px" : 0,
       }}>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="video/*"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) navigate("/editor", { state: { file: f, collectionId: state?.collectionId }, replace: true });
+          }}
+        />
         <div
-          onClick={pickFile}
+          onClick={() => fileInputRef.current?.click()}
           style={{
             display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
             padding: isMobile ? "40px 32px" : "48px 64px", borderRadius: 20, cursor: "pointer",

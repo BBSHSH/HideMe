@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import Header from '../components/Header'
 import { useAuth } from '../context/AuthContext'
 import { useIsMobile } from '../hooks/useIsMobile'
@@ -6,6 +6,8 @@ import { useIsMobile } from '../hooks/useIsMobile'
 export default function Layout() {
   const { logout } = useAuth()
   const isMobile = useIsMobile()
+  const location = useLocation()
+  const hideHeader = isMobile && location.pathname === "/file/shorts"
 
   return (
     <div className="min-h-screen bg-[#12131b] text-white">
@@ -50,9 +52,9 @@ export default function Layout() {
         }
       `}</style>
 
-      <Header onLogout={logout} />
+      {!hideHeader && <Header onLogout={logout} />}
 
-      <main style={{ paddingTop: isMobile ? 56 : 72 }}>
+      <main style={{ paddingTop: hideHeader ? 0 : isMobile ? 56 : 72 }}>
         <Outlet />
       </main>
     </div>

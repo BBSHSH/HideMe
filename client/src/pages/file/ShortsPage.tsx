@@ -147,23 +147,6 @@ function VideoOverlay({
           )}
         </div>
       </div>
-      {/* 上下ナビ */}
-      {showPrev && (
-        <button onClick={onPrev}
-          style={{ position: "absolute", top: 16, left: "50%", transform: "translateX(-50%)", zIndex: 10,
-            background: "rgba(0,0,0,0.4)", border: "none", borderRadius: "50%",
-            width: 40, height: 40, cursor: "pointer", color: "#fff",
-            display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <span className="material-symbols-outlined" style={{ fontSize: 20 }}>keyboard_arrow_up</span>
-        </button>
-      )}
-      <button onClick={onNext}
-        style={{ position: "absolute", bottom: 160, left: "50%", transform: "translateX(-50%)", zIndex: 10,
-          background: "rgba(0,0,0,0.4)", border: "none", borderRadius: "50%",
-          width: 40, height: 40, cursor: "pointer", color: "#fff",
-          display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <span className="material-symbols-outlined" style={{ fontSize: 20 }}>keyboard_arrow_down</span>
-      </button>
       {/* タップで再生/停止 */}
       <div
         onClick={onTogglePlay}
