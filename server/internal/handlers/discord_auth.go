@@ -122,7 +122,7 @@ func DiscordOAuthCallback(cfg *config.Config, database *sql.DB) gin.HandlerFunc 
 			redirectWithError(c, cfg.Public.FrontendURL, "user_fetch_failed")
 			return
 		}
-		log.Printf("[DISCORD] User: %s (%s)", discordUser.Username, discordUser.ID)
+		log.Printf("[DISCORD] User: %s (%s)", discordUser.DisplayName(), discordUser.ID)
 
 		// 3. Guild メンバー確認 + ロール確認
 		// GuildID が設定されている場合はサーバー参加を必須とする
@@ -157,7 +157,7 @@ func DiscordOAuthCallback(cfg *config.Config, database *sql.DB) gin.HandlerFunc 
 		dbUser, err := db.GetOrCreateDiscordUser(
 			database,
 			discordUser.ID,
-			discordUser.Username,
+			discordUser.DisplayName(),
 			discordUser.Avatar,
 			tokenResp.AccessToken,
 			tokenResp.RefreshToken,
@@ -234,9 +234,18 @@ type discordTokenResponse struct {
 }
 
 type discordAPIUser struct {
-	ID       string `json:"id"`
-	Username string `json:"username"`
-	Avatar   string `json:"avatar"`
+	ID         string `json:"id"`
+	Username   string `json:"username"`
+	GlobalName string `json:"global_name"`
+	Avatar     string `json:"avatar"`
+}
+
+// DisplayName は global_name があればそれを、なければ username を返す
+func (u *discordAPIUser) DisplayName() string {
+	if u.GlobalName != "" {
+		return u.GlobalName
+	}
+	return u.Username
 }
 
 func (u *discordAPIUser) AvatarURL() string {
