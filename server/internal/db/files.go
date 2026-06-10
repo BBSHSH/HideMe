@@ -165,7 +165,14 @@ func ListRecentFiles(db *sql.DB, limit int) ([]CollectionFile, error) {
 	return files, rows.Err()
 }
 
-func UpdateCollectionFile(db *sql.DB, fileID, displayName, thumbnailName, collectionID string) error {
+func UpdateCollectionFile(db *sql.DB, fileID, displayName, thumbnailName, collectionID, uploadedBy string) error {
+	if uploadedBy != "" {
+		_, err := db.Exec(
+			`UPDATE collection_files SET display_name = ?, thumbnail_name = ?, collection_id = ?, uploaded_by = ? WHERE id = ?`,
+			displayName, thumbnailName, collectionID, uploadedBy, fileID,
+		)
+		return err
+	}
 	_, err := db.Exec(
 		`UPDATE collection_files SET display_name = ?, thumbnail_name = ?, collection_id = ? WHERE id = ?`,
 		displayName, thumbnailName, collectionID, fileID,

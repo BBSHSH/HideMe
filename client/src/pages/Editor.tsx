@@ -7,8 +7,6 @@ import { useUpload } from "../context/UploadContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { isWebCodecsSupported } from "../utils/webCodecsEncoder";
 import { isMp4 } from "../utils/mp4Trim";
-import { useAuth } from "../context/AuthContext";
-
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
 // 秒 → "mm:ss.s" フォーマット
@@ -35,7 +33,6 @@ export default function Editor() {
   const file = state?.file ?? null;
   const { settings } = useSettings();
   const { startUpload } = useUpload();
-  const { user, isAdmin } = useAuth();
   const isMobile = useIsMobile();
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -68,10 +65,6 @@ export default function Editor() {
   const [collections, setCollections] = useState<CollectionItem[]>([]);
   const [collectionId, setCollectionId] = useState(state?.collectionId ?? "");
 
-  // アップロード者選択（管理者のみ）
-  const [users, setUsers] = useState<{ id: string; username: string }[]>([]);
-  const [uploadedBy, setUploadedBy] = useState("");
-
   useEffect(() => {
     const token = JSON.parse(localStorage.getItem("hideme_auth") || "{}").token ?? "";
     fetch(`${BASE_URL}/v1/collections`, {
@@ -88,15 +81,6 @@ export default function Editor() {
       })
       .catch(() => {});
   }, []);
-
-  useEffect(() => {
-    if (!isAdmin) return;
-    const token = JSON.parse(localStorage.getItem("hideme_auth") || "{}").token ?? "";
-    fetch(`${BASE_URL}/v1/users`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then(d => setUsers(d?.items ?? []))
-      .catch(() => {});
-  }, [isAdmin]);
 
   // 音量スライダー → プレビュー動画の音量にリアルタイム反映
   useEffect(() => {
@@ -218,7 +202,7 @@ export default function Editor() {
     }
 
     // バックグラウンドアップロード開始 → すぐに前の画面に戻る
-    startUpload({ file, collectionId, trimStart, trimEnd, volume, resolution, fps, outputName, encoder, uploadedBy: uploadedBy || undefined });
+    startUpload({ file, collectionId, trimStart, trimEnd, volume, resolution, fps, outputName, encoder });
     navigate(-1);
   };
 
@@ -494,19 +478,6 @@ export default function Editor() {
                   {collections.map(col => <option key={col.ID} value={col.ID}>{col.Name}</option>)}
                 </select>
               </div>
-              {/* アップロード者（管理者のみ） */}
-              {isAdmin && (
-                <div>
-                  <p style={{ margin: "0 0 8px", fontSize: 12, color: "#5865F2", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>アップロード者</p>
-                  <select value={uploadedBy} onChange={(e) => setUploadedBy(e.target.value)}
-                    style={{ width: "100%", background: "rgba(26,27,35,0.8)",
-                      border: "1px solid rgba(69,70,85,0.4)", borderRadius: 8,
-                      padding: "10px 12px", color: "#e3e1ed", fontSize: 14, fontFamily: F.family, outline: "none" }}>
-                    <option value="">自分（{user?.username}）</option>
-                    {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
-                  </select>
-                </div>
-              )}
               {/* 音量 */}
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -930,23 +901,6 @@ export default function Editor() {
               ))}
             </select>
           </section>
-
-          {/* ── アップロード者（管理者のみ） ── */}
-          {isAdmin && (
-            <section style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <h3 style={sidebarLabel}>
-                <Icon name="person" size={16} />
-                アップロード者
-              </h3>
-              <select value={uploadedBy} onChange={(e) => setUploadedBy(e.target.value)}
-                style={{ background: "rgba(26,27,35,0.8)", border: "1px solid rgba(69,70,85,0.4)",
-                  borderRadius: 8, padding: "8px 12px", color: "#e3e1ed", fontSize: 13,
-                  fontFamily: F.family, outline: "none", width: "100%", cursor: "pointer" }}>
-                <option value="">自分（{user?.username}）</option>
-                {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
-              </select>
-            </section>
-          )}
 
           {/* ── 音量 ── */}
           <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>

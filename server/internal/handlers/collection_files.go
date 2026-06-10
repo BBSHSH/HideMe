@@ -516,6 +516,11 @@ func PatchCollectionFile(database *sql.DB, storeFor StoreSelector, storageType s
 			newCollectionID = cf.CollectionID
 		}
 		thumbnailName := cf.ThumbnailName
+		// admin のみ uploaded_by を変更可能
+		newUploadedBy := ""
+		if cl.Role == "admin" {
+			newUploadedBy = c.PostForm("uploaded_by")
+		}
 
 		// サムネイル画像が送られてきた場合はアップロード
 		if thumbFile, err := c.FormFile("thumbnail"); err == nil {
@@ -534,7 +539,7 @@ func PatchCollectionFile(database *sql.DB, storeFor StoreSelector, storageType s
 			}
 		}
 
-		if err := db.UpdateCollectionFile(database, fileID, displayName, thumbnailName, newCollectionID); err != nil {
+		if err := db.UpdateCollectionFile(database, fileID, displayName, thumbnailName, newCollectionID, newUploadedBy); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_update"})
 			return
 		}

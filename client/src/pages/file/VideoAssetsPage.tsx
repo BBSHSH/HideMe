@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { C, F } from "../../theme/tokens";
 import { Icon } from "../../components/Icon";
 import { getCollectionFiles, deleteCollectionFile, recordView, updateCollectionFile } from "../../api/collections";
+import { getUsers, UserItem } from "../../api/chat";
 import { useCollections } from "../../hooks/useFiles";
 import { useAuth } from "../../context/AuthContext";
 import { formatBytes, formatRelativeTime } from "../../utils/format";
@@ -82,12 +83,14 @@ function EditFileModal({
   file,
   collectionId,
   collections,
+  isAdmin,
   onClose,
   onSaved,
 }: {
   file: CollectionFile;
   collectionId: string;
   collections: { ID: string; Name: string }[];
+  isAdmin: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -96,7 +99,15 @@ function EditFileModal({
   const [thumbnail, setThumbnail] = useState<File | null>(null);
   const [thumbPreview, setThumbPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [users, setUsers] = useState<UserItem[]>([]);
+  const [uploadedBy, setUploadedBy] = useState(file.uploaded_by || "");
   const thumbInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isAdmin) {
+      getUsers().then(r => setUsers(r.items || [])).catch(() => {});
+    }
+  }, [isAdmin]);
 
   const handleThumbChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -113,6 +124,7 @@ function EditFileModal({
         displayName,
         collectionId: selectedCollectionId,
         thumbnail: thumbnail ?? undefined,
+        uploadedBy: isAdmin ? uploadedBy || undefined : undefined,
       });
       onSaved();
     } catch {
@@ -181,6 +193,27 @@ function EditFileModal({
             ))}
           </select>
         </div>
+
+        {/* アップロード者（管理者のみ） */}
+        {isAdmin && users.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: C.onSurfaceVariant, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              アップロード者
+            </label>
+            <select
+              value={uploadedBy}
+              onChange={e => setUploadedBy(e.target.value)}
+              style={{ ...inputStyle, cursor: "pointer" }}
+            >
+              <option value="" style={{ background: "#1a1b24" }}>— 変更しない —</option>
+              {users.map(u => (
+                <option key={u.id} value={u.id} style={{ background: "#1a1b24" }}>
+                  {u.username}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* サムネイル */}
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -343,6 +376,7 @@ export default function VideoAssetsPage() {
           file={currentFile}
           collectionId={currentCollectionId}
           collections={collections}
+          isAdmin={user?.role === "admin"}
           onClose={() => setShowEdit(false)}
           onSaved={handleSaved}
         />

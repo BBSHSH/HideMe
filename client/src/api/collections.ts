@@ -100,12 +100,13 @@ export const deleteCollectionFile = (collectionId: string, fileId: string): Prom
 export const updateCollectionFile = async (
   collectionId: string,
   fileId: string,
-  params: { displayName: string; collectionId: string; thumbnail?: File }
+  params: { displayName: string; collectionId: string; thumbnail?: File; uploadedBy?: string }
 ): Promise<void> => {
   const form = new FormData();
   form.append("display_name", params.displayName);
   form.append("collection_id", params.collectionId);
   if (params.thumbnail) form.append("thumbnail", params.thumbnail);
+  if (params.uploadedBy) form.append("uploaded_by", params.uploadedBy);
 
   const res = await fetch(
     `${import.meta.env.VITE_API_BASE_URL ?? ""}/v1/collections/${collectionId}/files/${fileId}`,
