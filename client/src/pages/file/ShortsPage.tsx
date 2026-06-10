@@ -11,6 +11,7 @@ const VIDEO_EXTS = [".mp4", ".webm", ".mov", ".mkv", ".avi", ".flv", ".wmv"];
 interface VideoFile {
   id: string;
   file_name: string;
+  display_name: string;
   file_size: number;
   thumbnail_name: string;
   uploaded_at: string;
@@ -163,7 +164,7 @@ function VideoOverlay({
           </div>
         </div>
         <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#fff", lineHeight: 1.4 }}>
-          {video.file_name.replace(/\.[^.]+$/, "")}
+          {video.display_name || video.file_name.replace(/\.[^.]+$/, "")}
         </p>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
           <div style={{ width: 6, height: 6, borderRadius: "50%", background: video.color || C.primary }} />
