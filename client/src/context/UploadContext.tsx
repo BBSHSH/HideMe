@@ -78,9 +78,9 @@ export function UploadProvider({ children }: { children: ReactNode }) {
       try {
         let uploadFile = renamedFile;
 
-        // WebCodecs でブラウザ側エンコード
+        // ブラウザ側エンコード（MediaRecorder）
         if (encoder === "webcodecs") {
-          const encoded = await encodeWithWebCodecs(file, {
+          const { blob, ext } = await encodeWithWebCodecs(file, {
             trimStart,
             trimEnd,
             resolution,
@@ -90,7 +90,8 @@ export function UploadProvider({ children }: { children: ReactNode }) {
               updateJob(uploadId, { phase: "webcodecs", encodingPercent: pct });
             },
           });
-          uploadFile = new File([encoded], baseName, { type: "video/mp4" });
+          const encodedName = baseName.replace(/\.[^.]+$/, "") + ext;
+          uploadFile = new File([blob], encodedName, { type: blob.type });
           updateJob(uploadId, { phase: "sending", encodingPercent: 100 });
         }
 

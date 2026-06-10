@@ -1,5 +1,3 @@
-import { Muxer, ArrayBufferTarget } from "mp4-muxer";
-
 export interface WebCodecsEncodeOptions {
   trimStart: number;
   trimEnd: number;
@@ -35,25 +33,43 @@ function targetDims(vw: number, vh: number, res: string): [number, number] {
 }
 
 export function isWebCodecsSupported(): boolean {
-  return (
-    typeof VideoEncoder !== "undefined" &&
-    typeof VideoFrame !== "undefined" &&
-    typeof OffscreenCanvas !== "undefined"
-  );
+  return typeof MediaRecorder !== "undefined";
+}
+
+// 対応MIMEタイプを優先順に選択（H.264 > VP9 > VP8）
+function chooseMimeType(): string {
+  const candidates = [
+    "video/mp4;codecs=avc1",
+    "video/mp4;codecs=h264",
+    "video/webm;codecs=h264",
+    "video/webm;codecs=vp9,opus",
+    "video/webm;codecs=vp8,opus",
+    "video/webm;codecs=vp9",
+    "video/webm;codecs=vp8",
+    "video/webm",
+  ];
+  return candidates.find((t) => MediaRecorder.isTypeSupported(t)) ?? "video/webm";
+}
+
+function mimeToExt(mime: string): string {
+  if (mime.startsWith("video/mp4")) return ".mp4";
+  return ".webm";
 }
 
 export async function encodeWithWebCodecs(
   file: File,
   opts: WebCodecsEncodeOptions
-): Promise<Blob> {
+): Promise<{ blob: Blob; ext: string }> {
   const { trimStart, trimEnd, resolution, fps, volume, onProgress } = opts;
 
-  // ── ビデオ要素のロード ──────────────────────────────────
+  // ── ビデオ要素 ────────────────────────────────────────
   const videoEl = document.createElement("video");
   const blobUrl = URL.createObjectURL(file);
   videoEl.src = blobUrl;
-  videoEl.muted = true;
   videoEl.preload = "auto";
+  // muted=false でないと AudioContext がオーディオを取得できないブラウザがある
+  videoEl.muted = false;
+  videoEl.volume = 0; // スピーカーからは無音
 
   await new Promise<void>((resolve, reject) => {
     videoEl.onloadedmetadata = () => resolve();
@@ -65,160 +81,91 @@ export async function encodeWithWebCodecs(
   const srcH = videoEl.videoHeight || 720;
   const [tw, th] = targetDims(srcW, srcH, resolution);
 
-  // ── Muxer ──────────────────────────────────────────────
-  const muxTarget = new ArrayBufferTarget();
+  // ── Canvas（解像度スケーリング用）──────────────────────
+  const canvas = document.createElement("canvas");
+  canvas.width = tw;
+  canvas.height = th;
+  const ctx = canvas.getContext("2d")!;
 
-  // 音声エンコーダーが利用可能か確認
-  const hasAudioEncoder = typeof AudioEncoder !== "undefined" && typeof AudioData !== "undefined";
-  const useAudio = hasAudioEncoder;
+  // ── Web Audio API（音量調整）────────────────────────────
+  const audioCtx = new AudioContext();
+  const source = audioCtx.createMediaElementSource(videoEl);
+  const gainNode = audioCtx.createGain();
+  gainNode.gain.value = volume / 100;
+  const audioDest = audioCtx.createMediaStreamDestination();
+  source.connect(gainNode);
+  gainNode.connect(audioDest);
+  // スピーカーには接続しない（無音再生）
 
-  const muxer = new Muxer({
-    target: muxTarget,
-    video: { codec: "avc", width: tw, height: th },
-    ...(useAudio ? { audio: { codec: "aac", sampleRate: 44100, numberOfChannels: 2 } } : {}),
-    fastStart: "in-memory",
+  // ── キャプチャストリーム合成 ───────────────────────────
+  const canvasStream = canvas.captureStream(fps);
+  const combinedStream = new MediaStream([
+    ...canvasStream.getVideoTracks(),
+    ...audioDest.stream.getAudioTracks(),
+  ]);
+
+  const mimeType = chooseMimeType();
+  const ext = mimeToExt(mimeType);
+  const bitrate = BITRATES[resolution] ?? 4_000_000;
+
+  const recorder = new MediaRecorder(combinedStream, {
+    mimeType,
+    videoBitsPerSecond: bitrate,
   });
 
-  // ── VideoEncoder ───────────────────────────────────────
-  const videoEncoder = new VideoEncoder({
-    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
-    error: (e) => { throw e; },
-  });
-
-  const videoConfig: VideoEncoderConfig = {
-    codec: "avc1.42001f",
-    width: tw,
-    height: th,
-    bitrate: BITRATES[resolution] ?? 4_000_000,
-    framerate: fps,
-    bitrateMode: "variable",
+  const chunks: Blob[] = [];
+  recorder.ondataavailable = (e) => {
+    if (e.data.size > 0) chunks.push(e.data);
   };
 
-  const support = await VideoEncoder.isConfigSupported(videoConfig);
-  if (!support.supported) {
-    throw new Error("このブラウザではH.264エンコードがサポートされていません");
-  }
-  videoEncoder.configure(videoConfig);
+  // ── トリム開始位置にシーク ────────────────────────────
+  videoEl.currentTime = trimStart;
+  await new Promise<void>((resolve) => {
+    videoEl.onseeked = () => resolve();
+    setTimeout(resolve, 2000);
+  });
 
-  // ── 音声処理 ────────────────────────────────────────────
-  let audioEncoder: AudioEncoder | null = null;
-  let audioBuffer: AudioBuffer | null = null;
+  // ── Canvas描画ループ ───────────────────────────────────
+  let animId = 0;
+  const drawLoop = () => {
+    ctx.drawImage(videoEl, 0, 0, tw, th);
+    animId = requestAnimationFrame(drawLoop);
+  };
 
-  if (useAudio) {
-    try {
-      audioEncoder = new AudioEncoder({
-        output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
-        error: () => { audioEncoder = null; },
-      });
+  // ── 録画開始 ──────────────────────────────────────────
+  recorder.start(200);
+  drawLoop();
+  videoEl.play();
 
-      const audioSupport = await AudioEncoder.isConfigSupported({
-        codec: "mp4a.40.2",
-        sampleRate: 44100,
-        numberOfChannels: 2,
-        bitrate: 128_000,
-      });
+  const duration = trimEnd - trimStart;
 
-      if (audioSupport.supported) {
-        audioEncoder.configure({
-          codec: "mp4a.40.2",
-          sampleRate: 44100,
-          numberOfChannels: 2,
-          bitrate: 128_000,
-        });
+  // ── トリム終了まで待機 ────────────────────────────────
+  await new Promise<void>((resolve) => {
+    const check = () => {
+      const elapsed = videoEl.currentTime - trimStart;
+      onProgress?.(Math.min(96, (elapsed / duration) * 100));
 
-        const arrBuf = await file.arrayBuffer();
-        const tmpCtx = new AudioContext();
-        audioBuffer = await tmpCtx.decodeAudioData(arrBuf);
-        await tmpCtx.close();
-      } else {
-        audioEncoder.close();
-        audioEncoder = null;
-      }
-    } catch {
-      audioEncoder?.close();
-      audioEncoder = null;
-      audioBuffer = null;
-    }
-  }
-
-  // ── 音声エンコード（先にすべてエンコード）──────────────
-  if (audioEncoder && audioBuffer) {
-    const sampleRate = audioBuffer.sampleRate;
-    const nCh = Math.min(audioBuffer.numberOfChannels, 2);
-    const startSample = Math.floor(trimStart * sampleRate);
-    const endSample = Math.floor(trimEnd * sampleRate);
-    const totalSamples = endSample - startSample;
-    const gainFactor = volume / 100;
-    const CHUNK = 1024;
-
-    for (let s = 0; s < totalSamples; s += CHUNK) {
-      const len = Math.min(CHUNK, totalSamples - s);
-      const timestamp = Math.round((s / sampleRate) * 1_000_000);
-
-      // planar float32 format (f32)
-      const data = new Float32Array(len * nCh);
-      for (let c = 0; c < nCh; c++) {
-        const chanData = audioBuffer.getChannelData(c);
-        for (let i = 0; i < len; i++) {
-          const src = startSample + s + i;
-          data[c * len + i] = src < chanData.length ? chanData[src] * gainFactor : 0;
-        }
-      }
-
-      const audioData = new AudioData({
-        format: "f32",
-        sampleRate,
-        numberOfChannels: nCh,
-        numberOfFrames: len,
-        timestamp,
-        data,
-      });
-      audioEncoder.encode(audioData);
-      audioData.close();
-    }
-  }
-
-  // ── ビデオフレームエンコード ────────────────────────────
-  const canvas = new OffscreenCanvas(tw, th);
-  const ctx2d = canvas.getContext("2d") as OffscreenCanvasRenderingContext2D;
-  const totalFrames = Math.ceil((trimEnd - trimStart) * fps);
-  const frameInterval = 1 / fps;
-
-  for (let i = 0; i < totalFrames; i++) {
-    const t = trimStart + i * frameInterval;
-    videoEl.currentTime = t;
-
-    await new Promise<void>((resolve) => {
-      const onSeeked = () => {
-        videoEl.removeEventListener("seeked", onSeeked);
-        clearTimeout(timer);
+      if (videoEl.currentTime >= trimEnd - 0.05 || videoEl.ended) {
         resolve();
-      };
-      const timer = setTimeout(resolve, 500);
-      videoEl.addEventListener("seeked", onSeeked);
-    });
+      } else {
+        setTimeout(check, 100);
+      }
+    };
+    check();
+    videoEl.onended = () => resolve();
+  });
 
-    ctx2d.drawImage(videoEl, 0, 0, tw, th);
-    const timestamp = Math.round(i * (1_000_000 / fps));
-    const frame = new VideoFrame(canvas, { timestamp });
-    videoEncoder.encode(frame, { keyFrame: i % (fps * 2) === 0 });
-    frame.close();
+  // ── 後処理 ────────────────────────────────────────────
+  cancelAnimationFrame(animId);
+  videoEl.pause();
 
-    onProgress?.(Math.min(97, (i / totalFrames) * 100));
+  recorder.stop();
+  await new Promise<void>((r) => { recorder.onstop = () => r(); });
 
-    // UIをブロックしないよう定期的に yield
-    if (i % 10 === 0) {
-      await new Promise(r => setTimeout(r, 0));
-    }
-  }
-
-  // ── フラッシュ & 完了 ──────────────────────────────────
-  await videoEncoder.flush();
-  if (audioEncoder) await audioEncoder.flush();
-  muxer.finalize();
-
+  await audioCtx.close();
   URL.revokeObjectURL(blobUrl);
+
   onProgress?.(100);
 
-  return new Blob([muxTarget.buffer], { type: "video/mp4" });
+  return { blob: new Blob(chunks, { type: mimeType }), ext };
 }
