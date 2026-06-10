@@ -84,6 +84,7 @@ func main() {
 	// フロントエンド静的ファイル配信（./dist が存在する場合）
 	if _, err := os.Stat("./dist"); err == nil {
 		router.Static("/assets", "./dist/assets")
+		router.Static("/ffmpeg", "./dist/ffmpeg")
 		router.StaticFile("/favicon.ico", "./dist/favicon.ico")
 		// SPA: /v1 以外はすべて index.html を返す
 		router.NoRoute(func(c *gin.Context) {
