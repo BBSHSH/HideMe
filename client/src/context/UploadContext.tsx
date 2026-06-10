@@ -55,7 +55,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const startUpload = useCallback((opts: StartUploadOpts): string => {
-    const { file, collectionId, trimStart, trimEnd, volume, resolution, fps, outputName, encoder = "ffmpeg" } = opts as any;
+    const { file, collectionId, trimStart, trimEnd, volume, resolution, fps, outputName, encoder = "ffmpeg" } = opts;
     const uploadId = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36);
     const baseName = (outputName?.trim() || file.name.replace(/\.[^.]+$/, "")) + ".mp4";
     const renamedFile = new File([file], baseName, { type: file.type });
@@ -63,7 +63,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
     const job: UploadJob = {
       id: uploadId,
       fileName: baseName,
-      phase: (encoder === "webcodecs" || encoder === "ffmpeg-trim") ? "webcodecs" : "sending",
+      phase: encoder === "webcodecs" ? "webcodecs" : "sending",
       sendPercent: 0,
       encodingPercent: 0,
       nasPercent: 0,
