@@ -5,7 +5,6 @@ import { C } from "../../theme/tokens";
 
 function phaseLabel(job: UploadJob): string {
   switch (job.phase) {
-    case "webcodecs": return `フロント処理中... ${Math.round(job.encodingPercent)}%`;
     case "sending":   return `送信中... ${job.sendPercent}%`;
     case "encoding":  return `エンコード中... ${job.encodingPercent}%`;
     case "nas":       return `保存中... ${job.nasPercent}%`;
@@ -16,9 +15,8 @@ function phaseLabel(job: UploadJob): string {
 
 function phasePercent(job: UploadJob): number {
   switch (job.phase) {
-    case "webcodecs": return Math.round(job.encodingPercent * 0.4);
-    case "sending":  return 40 + Math.round(job.sendPercent * 0.3);
-    case "encoding": return 40 + Math.round(job.encodingPercent * 0.4);
+    case "sending":  return Math.round(job.sendPercent * 0.5);
+    case "encoding": return 50 + Math.round(job.encodingPercent * 0.3);
     case "nas":      return 80 + Math.round(job.nasPercent * 0.2);
     case "done":     return 100;
     case "error":    return 0;
