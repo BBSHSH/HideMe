@@ -6,6 +6,7 @@ import { useSettings } from "../context/SettingsContext";
 import { useUpload } from "../context/UploadContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { isWebCodecsSupported } from "../utils/webCodecsEncoder";
+import { isMp4 } from "../utils/mp4Trim";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -55,7 +56,8 @@ export default function Editor() {
 
   // エンコーダー選択
   const webCodecsAvailable = isWebCodecsSupported();
-  const [encoder, setEncoder] = useState<"ffmpeg" | "ffmpeg-trim" | "webcodecs">("ffmpeg-trim");
+  const fileisMp4 = file ? isMp4(file) : false;
+  const [encoder, setEncoder] = useState<"ffmpeg" | "ffmpeg-trim" | "webcodecs">(fileisMp4 ? "ffmpeg-trim" : "ffmpeg");
 
   // ファイル名変更
   const [outputName, setOutputName] = useState(file?.name.replace(/\.[^.]+$/, "") ?? "");
@@ -528,7 +530,7 @@ export default function Editor() {
               <div>
                 <p style={{ margin: "0 0 8px", fontSize: 12, color: "#5865F2", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>エンコーダー</p>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-                  {(["ffmpeg", "ffmpeg-trim", "webcodecs"] as const).map(enc => {
+                  {(["ffmpeg", "ffmpeg-trim", "webcodecs"] as const).filter(enc => enc !== "ffmpeg-trim" || fileisMp4).map(enc => {
                     const disabled = enc === "webcodecs" && !webCodecsAvailable;
                     const active = encoder === enc;
                     const label = enc === "ffmpeg" ? "FFmpeg" : enc === "ffmpeg-trim" ? "高速" : "MediaRec";
@@ -993,7 +995,7 @@ export default function Editor() {
               エンコーダー
             </h3>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-              {(["ffmpeg", "ffmpeg-trim", "webcodecs"] as const).map((enc) => {
+              {(["ffmpeg", "ffmpeg-trim", "webcodecs"] as const).filter(enc => enc !== "ffmpeg-trim" || fileisMp4).map((enc) => {
                 const disabled = enc === "webcodecs" && !webCodecsAvailable;
                 const active = encoder === enc;
                 const label = enc === "ffmpeg" ? "FFmpeg" : enc === "ffmpeg-trim" ? "高速" : "MediaRecorder";
