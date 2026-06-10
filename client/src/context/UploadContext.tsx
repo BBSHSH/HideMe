@@ -30,6 +30,7 @@ export interface StartUploadOpts {
   fps: number;
   outputName?: string;
   encoder?: "ffmpeg" | "ffmpeg-trim" | "webcodecs";
+  uploadedBy?: string;
 }
 
 interface UploadContextValue {
@@ -56,7 +57,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const startUpload = useCallback((opts: StartUploadOpts): string => {
-    const { file, collectionId, trimStart, trimEnd, volume, resolution, fps, outputName, encoder = "ffmpeg" } = opts;
+    const { file, collectionId, trimStart, trimEnd, volume, resolution, fps, outputName, encoder = "ffmpeg", uploadedBy } = opts;
     const uploadId = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36);
     const baseName = (outputName?.trim() || file.name.replace(/\.[^.]+$/, "")) + ".mp4";
     const renamedFile = new File([file], baseName, { type: file.type });
@@ -123,6 +124,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
           resolution: encoder === "webcodecs" ? "original" : resolution,
           fps: encoder === "webcodecs" ? 0 : fps,
           skipEncode: encoder === "webcodecs",
+          uploadedBy,
           onSendProgress: (percent) => {
             updateJob(uploadId, { phase: "sending", sendPercent: percent });
           },

@@ -149,6 +149,12 @@ func MergeAndUpload(store storage.Storage, database *sql.DB, storageType string)
 		userID := ""
 		if claims != nil {
 			userID = claims.(*auth.Claims).UserID
+			// 管理者は X-Uploaded-By で任意のユーザーIDを指定可能
+			if claims.(*auth.Claims).Role == "admin" {
+				if overrideID := c.GetHeader("X-Uploaded-By"); overrideID != "" {
+					userID = overrideID
+				}
+			}
 		}
 
 		// 即座に 202 Accepted を返してバックグラウンドで処理
