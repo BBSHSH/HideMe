@@ -41,6 +41,15 @@ function useAllFiles(limit = 6) {
   return files;
 }
 
+function useActivity() {
+  const [events, setEvents] = useState<any[]>([]);
+  useEffect(() => {
+    fetch(`${BASE_URL}/v1/activity`, { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then((r) => r.json()).then((d) => setEvents(d?.items ?? [])).catch(() => {});
+  }, []);
+  return events;
+}
+
 function useRecentChat() {
   const [channels, setChannels] = useState<{ id: string; name: string }[]>([]);
   const [messages, setMessages] = useState<any[]>([]);
@@ -105,6 +114,39 @@ function fileIcon(name: string) {
   if (IMAGE_EXTS.some((e) => l.endsWith(e))) return { icon: "image",            color: "#34d399" };
   if (l.endsWith(".pdf"))                     return { icon: "picture_as_pdf",   color: "#f87171" };
   return                                             { icon: "insert_drive_file", color: C.primary };
+}
+
+function ActivityRow({ event }: { event: any }) {
+  const isLogin = event.type === "login";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 12px" }}>
+      {event.avatar ? (
+        <img src={event.avatar} alt="" style={{ width: 28, height: 28, borderRadius: "50%", flexShrink: 0, objectFit: "cover" }} />
+      ) : (
+        <div style={{ width: 28, height: 28, flexShrink: 0, borderRadius: "50%",
+          background: "rgba(88,101,242,0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Icon name="person" size={14} style={{ color: C.primary }} />
+        </div>
+      )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: C.onSurface,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {event.username}
+        </p>
+        <p style={{ margin: 0, fontSize: 11, color: C.outlineVariant,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {isLogin ? "ログイン" : `アップロード: ${event.detail}`}
+        </p>
+      </div>
+      <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 4 }}>
+        <Icon name={isLogin ? "login" : "cloud_upload"} size={12}
+          style={{ color: isLogin ? "#4ade80" : C.primary, opacity: 0.8 }} />
+        <span style={{ fontSize: 10, color: C.outline }}>
+          {formatRelativeTime(event.created_at)}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 function RecentFileRow({ file }: { file: any }) {
@@ -181,6 +223,7 @@ export default function Dashboard() {
   const collectionCount = useCollectionCount();
   const recentFiles = useAllFiles(6);
   const { messages: chatMsgs } = useRecentChat();
+  const activityEvents = useActivity();
   const isMobile = useIsMobile();
 
   const now = new Date();
@@ -281,6 +324,34 @@ export default function Dashboard() {
                 : recentFiles.map((f) => <RecentFileRow key={f.id} file={f} />)
               }
             </div>
+          </div>
+        </div>
+
+        {/* 最近のアクティビティ */}
+        <div style={{
+          width: isMobile ? "100%" : 260, flexShrink: 0,
+          display: "flex", flexDirection: "column", gap: 8, overflow: "hidden",
+          minHeight: isMobile ? 200 : 0,
+        }}>
+          <div style={{ flexShrink: 0 }}>
+            <p style={sectionLabel}>最近のアクティビティ</p>
+          </div>
+          <div style={{
+            flex: 1, minHeight: 0,
+            background: "rgba(88,101,242,0.06)", border: "1px solid rgba(88,101,242,0.18)",
+            borderRadius: 12, overflow: "hidden", display: "flex", flexDirection: "column",
+          }}>
+            {activityEvents.length === 0 ? (
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+                flexDirection: "column", gap: 8, color: C.outline }}>
+                <Icon name="history" size={32} style={{ opacity: 0.3 }} />
+                <p style={{ fontSize: 12, margin: 0 }}>アクティビティなし</p>
+              </div>
+            ) : (
+              <div style={{ flex: 1, overflowY: "auto", padding: "4px" }}>
+                {activityEvents.map((e: any) => <ActivityRow key={e.id} event={e} />)}
+              </div>
+            )}
           </div>
         </div>
 

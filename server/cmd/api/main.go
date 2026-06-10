@@ -153,6 +153,9 @@ func main() {
 	api.POST("/admin/migrate-storage", middleware.RequireAuth(), middleware.RequireAdmin(), handlers.StartMigration(nasStore, localStore, database))
 	api.GET("/admin/migrate-status", middleware.RequireAuth(), middleware.RequireAdmin(), handlers.GetMigrateStatus())
 
+	// アクティビティ
+	api.GET("/activity", middleware.RequireAuth(), handlers.ListActivity(database))
+
 	// users (DM 相手選択用)
 	api.GET("/users", middleware.RequireAuth(), handlers.ListUsers(database))
 

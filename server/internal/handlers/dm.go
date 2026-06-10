@@ -13,6 +13,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// GET /v1/activity  最近のアクティビティ
+func ListActivity(database *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		events, err := db.ListActivity(database, 30)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"items": events})
+	}
+}
+
 // GET /v1/users  全ユーザー一覧（DM 相手選択用）
 func ListUsers(database *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {

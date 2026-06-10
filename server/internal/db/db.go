@@ -124,6 +124,16 @@ func migrate(db *sql.DB) error {
 			uploaded_by    TEXT,
 			uploaded_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
+
+		CREATE TABLE IF NOT EXISTS activity_log (
+			id         TEXT PRIMARY KEY,
+			type       TEXT NOT NULL,
+			user_id    TEXT NOT NULL,
+			username   TEXT NOT NULL,
+			avatar     TEXT NOT NULL DEFAULT '',
+			detail     TEXT NOT NULL DEFAULT '',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
 	`)
 	if err != nil {
 		return err

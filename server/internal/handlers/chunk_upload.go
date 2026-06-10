@@ -147,10 +147,15 @@ func MergeAndUpload(store storage.Storage, database *sql.DB, storageType string)
 		// 認証情報を取得
 		claims, _ := c.Get(middleware.ClaimsKey)
 		userID := ""
+		uploaderName := ""
+		uploaderAvatar := ""
 		if claims != nil {
-			userID = claims.(*auth.Claims).UserID
+			cl := claims.(*auth.Claims)
+			userID = cl.UserID
+			uploaderName = cl.Username
+			uploaderAvatar = cl.AvatarURL
 			// 管理者は X-Uploaded-By で任意のユーザーIDを指定可能
-			if claims.(*auth.Claims).Role == "admin" {
+			if cl.Role == "admin" {
 				if overrideID := c.GetHeader("X-Uploaded-By"); overrideID != "" {
 					userID = overrideID
 				}
@@ -173,6 +178,7 @@ func MergeAndUpload(store storage.Storage, database *sql.DB, storageType string)
 			} else {
 				uploadNonVideoBackground(store, database, storageType, uploadID, collectionID, userID, fileName, mergedPath)
 			}
+			db.LogActivity(database, "upload", userID, uploaderName, uploaderAvatar, fileName)
 		}()
 	}
 }
