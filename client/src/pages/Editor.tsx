@@ -5,8 +5,6 @@ import { Icon } from "../components/Icon";
 import { useSettings } from "../context/SettingsContext";
 import { useUpload } from "../context/UploadContext";
 import { useIsMobile } from "../hooks/useIsMobile";
-import { isWebCodecsSupported } from "../utils/webCodecsEncoder";
-import { isMp4 } from "../utils/mp4Trim";
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
 // 秒 → "mm:ss.s" フォーマット
@@ -21,7 +19,6 @@ function fmtTime(sec: number): string {
 
 type Resolution = "1080p" | "720p" | "480p" | "240p";
 type FPS = 24 | 30 | 60;
-// ─── メインコンポーネント ───────────────────────────────
 
 interface CollectionItem { ID: string; Name: string; }
 
@@ -52,11 +49,6 @@ export default function Editor() {
   const [volume, setVolume] = useState(() => settings.defaultVolume);
   const [resolution, setResolution] = useState<Resolution>(() => settings.defaultResolution);
   const [fps, setFps] = useState<FPS>(() => settings.defaultFps);
-
-  // エンコーダー選択
-  const webCodecsAvailable = isWebCodecsSupported();
-  const fileisMp4 = file ? isMp4(file) : false;
-  const [encoder, setEncoder] = useState<"ffmpeg" | "ffmpeg-trim" | "webcodecs">(fileisMp4 ? "ffmpeg-trim" : "ffmpeg");
 
   // ファイル名変更
   const [outputName, setOutputName] = useState(file?.name.replace(/\.[^.]+$/, "") ?? "");
@@ -202,7 +194,7 @@ export default function Editor() {
     }
 
     // バックグラウンドアップロード開始 → すぐに前の画面に戻る
-    startUpload({ file, collectionId, trimStart, trimEnd, volume, resolution, fps, outputName, encoder });
+    startUpload({ file, collectionId, trimStart, trimEnd, volume, resolution, fps, outputName });
     navigate(-1);
   };
 
@@ -457,16 +449,6 @@ export default function Editor() {
             </div>
           ) : (
             <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 20 }}>
-              {/* ファイル名 */}
-              <div>
-                <p style={{ margin: "0 0 8px", fontSize: 12, color: "#5865F2", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>ファイル名</p>
-                <input type="text" value={outputName} onChange={(e) => setOutputName(e.target.value)}
-                  placeholder="ファイル名（拡張子不要）"
-                  style={{ width: "100%", boxSizing: "border-box", background: "rgba(26,27,35,0.8)",
-                    border: "1px solid rgba(69,70,85,0.4)", borderRadius: 8,
-                    padding: "10px 12px", color: "#e3e1ed", fontSize: 14, fontFamily: F.family, outline: "none" }} />
-                <p style={{ margin: "4px 0 0", fontSize: 10, color: "#454655" }}>出力: {outputName || file.name.replace(/\.[^.]+$/, "")}.mp4</p>
-              </div>
               {/* コレクション */}
               <div>
                 <p style={{ margin: "0 0 8px", fontSize: 12, color: "#5865F2", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>アップロード先</p>
@@ -525,44 +507,20 @@ export default function Editor() {
                   ))}
                 </div>
               </div>
-              {/* エンコーダー */}
-              <div>
-                <p style={{ margin: "0 0 8px", fontSize: 12, color: "#5865F2", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>エンコーダー</p>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-                  {(["ffmpeg", ...(fileisMp4 ? ["ffmpeg-trim"] : []), "webcodecs"] as const).map(enc => {
-                    const disabled = enc === "webcodecs" && !webCodecsAvailable;
-                    const active = encoder === enc;
-                    const label = enc === "ffmpeg" ? "FFmpeg" : enc === "ffmpeg-trim" ? "高速" : "MediaRec";
-                    const sub = enc === "ffmpeg" ? "サーバー処理" : enc === "ffmpeg-trim" ? "MP4トリム" : disabled ? "非対応" : "ブラウザ録画";
-                    return (
-                      <button key={enc} onClick={() => !disabled && setEncoder(enc as "ffmpeg" | "ffmpeg-trim" | "webcodecs")} style={{
-                        padding: "10px 4px", borderRadius: 8,
-                        border: `1px solid ${active ? "#5865F2" : "rgba(69,70,85,0.3)"}`,
-                        background: active ? "rgba(88,101,242,0.15)" : "rgba(26,27,35,0.8)",
-                        color: disabled ? "#454655" : active ? "#bec2ff" : C.onSurfaceVariant,
-                        fontSize: 11, fontWeight: 700,
-                        cursor: disabled ? "not-allowed" : "pointer",
-                        display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-                      }}>
-                        <span>{label}</span>
-                        <span style={{ fontSize: 9, opacity: 0.7 }}>{sub}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <p style={{ margin: "6px 0 0", fontSize: 10, color: "#8f8fa0" }}>
-                  {encoder === "ffmpeg" && "元ファイルをそのままサーバーへ送信"}
-                  {encoder === "webcodecs" && "ブラウザで録画（再生時間と同じ時間）"}
-                </p>
-              </div>
             </div>
           )}
         </div>
 
-        {/* アップロードボタン（固定底部・iPhoneセーフエリア対応） */}
+        {/* ファイル名 + アップロードボタン（固定底部・iPhoneセーフエリア対応） */}
         <div style={{ flexShrink: 0, padding: "12px 16px", borderTop: "1px solid rgba(69,70,85,0.2)",
-          background: "rgba(13,14,22,0.95)",
+          background: "rgba(13,14,22,0.95)", display: "flex", flexDirection: "column", gap: 8,
           paddingBottom: "calc(12px + env(safe-area-inset-bottom, 0px))" }}>
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "#5865F2", textTransform: "uppercase", letterSpacing: "0.08em" }}>ファイル名</p>
+          <input type="text" value={outputName} onChange={(e) => setOutputName(e.target.value)}
+            placeholder="ファイル名（拡張子不要）"
+            style={{ width: "100%", boxSizing: "border-box", background: "rgba(26,27,35,0.8)",
+              border: "1px solid rgba(69,70,85,0.4)", borderRadius: 8,
+              padding: "10px 12px", color: "#e3e1ed", fontSize: 14, fontFamily: F.family, outline: "none" }} />
           <button onClick={handleUpload} disabled={!collectionId} style={{
             width: "100%", padding: "14px 0",
             background: !collectionId ? "rgba(88,101,242,0.3)" : "#5865F2",
@@ -574,7 +532,7 @@ export default function Editor() {
             <Icon name="cloud_upload" size={20} />
             アップロード開始
           </button>
-          <p style={{ margin: "6px 0 0", fontSize: 10, textAlign: "center", color: C.outlineVariant }}>
+          <p style={{ margin: 0, fontSize: 10, textAlign: "center", color: C.outlineVariant }}>
             バックグラウンドでアップロードされます
           </p>
         </div>
@@ -844,35 +802,6 @@ export default function Editor() {
       >
         <div style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 24 }}>
 
-          {/* ── ファイル名 ── */}
-          <section style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <h3 style={sidebarLabel}>
-              <Icon name="edit" size={16} />
-              ファイル名
-            </h3>
-            <input
-              type="text"
-              value={outputName}
-              onChange={(e) => setOutputName(e.target.value)}
-              placeholder="ファイル名（拡張子不要）"
-              style={{
-                background: "rgba(26,27,35,0.8)",
-                border: "1px solid rgba(69,70,85,0.4)",
-                borderRadius: 8,
-                padding: "8px 12px",
-                color: "#e3e1ed",
-                fontSize: 13,
-                fontFamily: F.family,
-                outline: "none",
-                width: "100%",
-                boxSizing: "border-box",
-              }}
-            />
-            <p style={{ margin: 0, fontSize: 10, color: "#454655" }}>
-              出力: {(outputName.trim() || file?.name.replace(/\.[^.]+$/, "") || "")}.mp4
-            </p>
-          </section>
-
           {/* ── コレクション ── */}
           <section style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <h3 style={sidebarLabel}>
@@ -986,52 +915,30 @@ export default function Editor() {
             </div>
           </section>
 
-          {/* ── エンコーダー ── */}
-          <section style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <h3 style={sidebarLabel}>
-              <Icon name="memory" size={16} />
-              エンコーダー
-            </h3>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-              {(["ffmpeg", ...(fileisMp4 ? ["ffmpeg-trim"] : []), "webcodecs"] as const).map((enc) => {
-                const disabled = enc === "webcodecs" && !webCodecsAvailable;
-                const active = encoder === enc;
-                const label = enc === "ffmpeg" ? "FFmpeg" : enc === "ffmpeg-trim" ? "高速(MP4)" : "MediaRecorder";
-                const sub = enc === "ffmpeg" ? "サーバー処理" : enc === "ffmpeg-trim" ? "ブラウザトリム" : disabled ? "非対応" : "ブラウザ録画";
-                return (
-                  <button
-                    key={enc}
-                    onClick={() => !disabled && setEncoder(enc as "ffmpeg" | "ffmpeg-trim" | "webcodecs")}
-                    title={enc === "webcodecs" && disabled ? "このブラウザはMediaRecorderをサポートしていません" : undefined}
-                    style={{
-                      padding: "8px 4px",
-                      borderRadius: 8,
-                      border: `1px solid ${active ? "#5865F2" : "rgba(69,70,85,0.3)"}`,
-                      background: active ? "rgba(88,101,242,0.15)" : "rgba(26,27,35,0.8)",
-                      color: disabled ? "#454655" : active ? "#bec2ff" : C.onSurfaceVariant,
-                      fontSize: 11, fontWeight: 700,
-                      cursor: disabled ? "not-allowed" : "pointer",
-                      transition: "all 0.15s",
-                      display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-                    }}
-                  >
-                    <span>{label}</span>
-                    <span style={{ fontSize: 9, opacity: 0.7, fontWeight: 400 }}>{sub}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <p style={{ margin: 0, fontSize: 10, color: "#8f8fa0", lineHeight: 1.5 }}>
-              {encoder === "ffmpeg" && "元ファイルをそのまま送信。サーバーでトリム・エンコード。"}
-              {encoder === "ffmpeg-trim" && "MP4をブラウザでトリムして軽くしてから送信（推奨）。"}
-              {encoder === "webcodecs" && "ブラウザ内でリアルタイム録画。再生時間と同じ時間がかかります。"}
-            </p>
-          </section>
 
         </div>
 
-        {/* ── アップロードボタン ── */}
-        <div style={{ padding: 16, borderTop: "1px solid rgba(69,70,85,0.2)", background: "rgba(13,14,22,0.8)" }}>
+        {/* ── ファイル名 + アップロードボタン ── */}
+        <div style={{ padding: 16, borderTop: "1px solid rgba(69,70,85,0.2)", background: "rgba(13,14,22,0.8)", display: "flex", flexDirection: "column", gap: 10 }}>
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "#5865F2", textTransform: "uppercase", letterSpacing: "0.08em" }}>ファイル名</p>
+          <input
+            type="text"
+            value={outputName}
+            onChange={(e) => setOutputName(e.target.value)}
+            placeholder="ファイル名（拡張子不要）"
+            style={{
+              background: "rgba(26,27,35,0.8)",
+              border: "1px solid rgba(69,70,85,0.4)",
+              borderRadius: 8,
+              padding: "8px 12px",
+              color: "#e3e1ed",
+              fontSize: 13,
+              fontFamily: F.family,
+              outline: "none",
+              width: "100%",
+              boxSizing: "border-box",
+            }}
+          />
           <button
             onClick={handleUpload}
             disabled={!collectionId}
@@ -1048,7 +955,7 @@ export default function Editor() {
             <Icon name="cloud_upload" size={20} />
             アップロード開始
           </button>
-          <p style={{ fontSize: 10, textAlign: "center", color: C.outlineVariant, marginTop: 6 }}>
+          <p style={{ fontSize: 10, textAlign: "center", color: C.outlineVariant, margin: 0 }}>
             バックグラウンドでアップロードされます
           </p>
         </div>

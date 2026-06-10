@@ -8,6 +8,7 @@ import Editor from './pages/Editor'
 import Login from './pages/Login'
 import DiscordCallback from './pages/DiscordCallback'
 import AdminAuthSettings from './pages/AdminAuthSettings'
+import AdminStorageMigrate from './pages/AdminStorageMigrate'
 import FileLayout from './layouts/FileLayout.tsx'
 import AllFilesPage from './pages/file/AllFilesPage'
 import VideoFilesPage from './pages/file/VideoFilesPage.tsx'
@@ -39,9 +40,12 @@ function App() {
             <Route path="/editor" element={<Editor />} />
             <Route path="/chat" element={<Chat />} />
 
-            {/* 管理者専用: 認証設定 */}
+            {/* 管理者専用 */}
             {isAdmin && (
-              <Route path="/admin/auth-settings" element={<AdminAuthSettings />} />
+              <>
+                <Route path="/admin/auth-settings" element={<AdminAuthSettings />} />
+                <Route path="/admin/storage-migrate" element={<AdminStorageMigrate />} />
+              </>
             )}
 
             <Route path="/file" element={<FileLayout />}>

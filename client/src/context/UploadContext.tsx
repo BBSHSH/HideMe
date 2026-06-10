@@ -1,12 +1,10 @@
 import { createContext, useContext, useRef, useState, useCallback } from "react";
 import type { ReactNode } from "react";
 import { uploadFileInChunks } from "../api/chunkUpload";
-import { encodeWithWebCodecs } from "../utils/webCodecsEncoder";
-import { trimMp4, isMp4 } from "../utils/mp4Trim";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
-export type UploadPhase = "webcodecs" | "sending" | "encoding" | "nas" | "done" | "error";
+export type UploadPhase = "sending" | "encoding" | "nas" | "done" | "error";
 
 export interface UploadJob {
   id: string;
@@ -29,7 +27,6 @@ export interface StartUploadOpts {
   resolution: string;
   fps: number;
   outputName?: string;
-  encoder?: "ffmpeg" | "ffmpeg-trim" | "webcodecs";
   uploadedBy?: string;
 }
 
@@ -57,7 +54,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const startUpload = useCallback((opts: StartUploadOpts): string => {
-    const { file, collectionId, trimStart, trimEnd, volume, resolution, fps, outputName, encoder = "ffmpeg", uploadedBy } = opts;
+    const { file, collectionId, trimStart, trimEnd, volume, resolution, fps, outputName, uploadedBy } = opts;
     const uploadId = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36);
     const baseName = (outputName?.trim() || file.name.replace(/\.[^.]+$/, "")) + ".mp4";
     const renamedFile = new File([file], baseName, { type: file.type });
@@ -65,7 +62,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
     const job: UploadJob = {
       id: uploadId,
       fileName: baseName,
-      phase: (encoder === "webcodecs" || encoder === "ffmpeg-trim") ? "webcodecs" : "sending",
+      phase: "sending",
       sendPercent: 0,
       encodingPercent: 0,
       nasPercent: 0,
@@ -75,55 +72,19 @@ export function UploadProvider({ children }: { children: ReactNode }) {
 
     setJobs(prev => [job, ...prev]);
 
-    // バックグラウンドでアップロード開始
     (async () => {
       try {
-        let uploadFile = renamedFile;
-        let uploadTrimStart = trimStart;
-        let uploadTrimEnd = trimEnd;
-
-
-        // MP4をブラウザでトリム（mp4box.js・WASM不要）
-        if (encoder === "ffmpeg-trim" && isMp4(file)) {
-          const trimmed = await trimMp4(file, trimStart, trimEnd, (pct) => {
-            updateJob(uploadId, { phase: "webcodecs", encodingPercent: pct });
-          });
-          uploadFile = new File([trimmed], baseName, { type: "video/mp4" });
-          uploadTrimStart = 0;
-          uploadTrimEnd = trimEnd - trimStart;
-          updateJob(uploadId, { phase: "sending", encodingPercent: 100 });
-        }
-
-        // ブラウザ側エンコード（MediaRecorder）
-        if (encoder === "webcodecs") {
-          const { blob, ext } = await encodeWithWebCodecs(file, {
-            trimStart,
-            trimEnd,
-            resolution,
-            fps,
-            volume,
-            onProgress: (pct) => {
-              updateJob(uploadId, { phase: "webcodecs", encodingPercent: pct });
-            },
-          });
-          const encodedName = baseName.replace(/\.[^.]+$/, "") + ext;
-          uploadFile = new File([blob], encodedName, { type: blob.type });
-          uploadTrimStart = 0;
-          uploadTrimEnd = trimEnd - trimStart;
-          updateJob(uploadId, { phase: "sending", encodingPercent: 100 });
-        }
-
         // チャンク送信
         const mergeRes = await uploadFileInChunks({
-          file: uploadFile,
+          file: renamedFile,
           collectionId,
           uploadId,
-          trimStart: uploadTrimStart,
-          trimEnd: uploadTrimEnd,
-          volume: encoder === "webcodecs" ? 100 : volume,
-          resolution: encoder === "webcodecs" ? "original" : resolution,
-          fps: encoder === "webcodecs" ? 0 : fps,
-          skipEncode: encoder === "webcodecs",
+          trimStart,
+          trimEnd,
+          volume,
+          resolution,
+          fps,
+          skipEncode: false,
           uploadedBy,
           onSendProgress: (percent) => {
             updateJob(uploadId, { phase: "sending", sendPercent: percent });

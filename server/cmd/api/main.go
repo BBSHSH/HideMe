@@ -140,6 +140,19 @@ func main() {
 	// WebSocket アップロード（Cloudflare経由でも高速）
 	api.GET("/ws-upload", handlers.WSUpload(store, database, cfg.Storage.Type))
 
+	// ストレージ移植（admin only）
+	nasStore := storage.NewNASStorage(storage.NASConfig{
+		Host:           cfg.Storage.NAS.Host,
+		User:           cfg.Storage.NAS.User,
+		Password:       cfg.Storage.NAS.Password,
+		Share:          cfg.Storage.NAS.Share,
+		Port:           cfg.Storage.NAS.Port,
+		PrivateKeyPath: cfg.Storage.NAS.PrivateKeyPath,
+	})
+	localStore := storage.NewLocalStorage(cfg.Storage.Local.BaseDir)
+	api.POST("/admin/migrate-storage", middleware.RequireAuth(), middleware.RequireAdmin(), handlers.StartMigration(nasStore, localStore, database))
+	api.GET("/admin/migrate-status", middleware.RequireAuth(), middleware.RequireAdmin(), handlers.GetMigrateStatus())
+
 	// users (DM 相手選択用)
 	api.GET("/users", middleware.RequireAuth(), handlers.ListUsers(database))
 

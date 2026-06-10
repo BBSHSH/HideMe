@@ -324,7 +324,10 @@ export default function Header({ onLogout }: HeaderProps) {
               </div>
 
               {isAdmin && (
-                <MenuBtn icon="key" label="認証設定" onClick={() => { navigate("/admin/auth-settings"); setShowMenu(false); }} />
+                <>
+                  <MenuBtn icon="key" label="認証設定" onClick={() => { navigate("/admin/auth-settings"); setShowMenu(false); }} />
+                  <MenuBtn icon="move_to_inbox" label="ストレージ移植" onClick={() => { navigate("/admin/storage-migrate"); setShowMenu(false); }} />
+                </>
               )}
               <MenuBtn icon="logout" label="ログアウト" danger onClick={() => { onLogout?.(); setShowMenu(false); }} />
             </div>
