@@ -2,7 +2,6 @@ import { createContext, useContext, useRef, useState, useCallback } from "react"
 import type { ReactNode } from "react";
 import { uploadFileInChunks } from "../api/chunkUpload";
 import { encodeWithWebCodecs } from "../utils/webCodecsEncoder";
-import { trimMp4, isMp4 } from "../utils/mp4Trim";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -29,7 +28,7 @@ export interface StartUploadOpts {
   resolution: string;
   fps: number;
   outputName?: string;
-  encoder?: "ffmpeg" | "ffmpeg-trim" | "webcodecs";
+  encoder?: "ffmpeg" | "webcodecs";
 }
 
 interface UploadContextValue {
@@ -56,7 +55,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const startUpload = useCallback((opts: StartUploadOpts): string => {
-    const { file, collectionId, trimStart, trimEnd, volume, resolution, fps, outputName, encoder = "ffmpeg" } = opts;
+    const { file, collectionId, trimStart, trimEnd, volume, resolution, fps, outputName, encoder = "ffmpeg" } = opts as any;
     const uploadId = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36);
     const baseName = (outputName?.trim() || file.name.replace(/\.[^.]+$/, "")) + ".mp4";
     const renamedFile = new File([file], baseName, { type: file.type });
@@ -81,18 +80,6 @@ export function UploadProvider({ children }: { children: ReactNode }) {
         let uploadTrimStart = trimStart;
         let uploadTrimEnd = trimEnd;
 
-        // フロントトリム: MP4 は mp4box.js（WASM不要）、それ以外はそのまま送信
-        if (encoder === "ffmpeg-trim") {
-          if (isMp4(file)) {
-            const trimmed = await trimMp4(file, trimStart, trimEnd, (pct) => {
-              updateJob(uploadId, { phase: "webcodecs", encodingPercent: pct });
-            });
-            uploadFile = new File([trimmed], baseName, { type: "video/mp4" });
-            uploadTrimStart = 0;
-            uploadTrimEnd = trimEnd - trimStart;
-          }
-          updateJob(uploadId, { phase: "sending", encodingPercent: 100 });
-        }
 
         // ブラウザ側エンコード（MediaRecorder）
         if (encoder === "webcodecs") {
