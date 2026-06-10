@@ -180,11 +180,13 @@ func (h *Hub) IsOnline(userID string) bool {
 func (h *Hub) ServeClient(conn *websocket.Conn, userID string, onConnect, onDisconnect func()) {
 	c := &Client{hub: h, conn: conn, send: make(chan []byte, 256), UserID: userID}
 	h.register <- c
+	h.Broadcast(WSMessage{Type: "member_online", Data: map[string]string{"user_id": userID}})
 	if onConnect != nil {
 		onConnect()
 	}
 	go c.writePump()
 	c.readPump()
+	h.Broadcast(WSMessage{Type: "member_offline", Data: map[string]string{"user_id": userID}})
 	if onDisconnect != nil {
 		onDisconnect()
 	}

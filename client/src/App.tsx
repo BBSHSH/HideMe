@@ -20,11 +20,13 @@ import VideoAssetsPage from './pages/file/VideoAssetsPage'
 import { RecentPage, FavoritesPage, CleanupPage, ImagesPage, OthersPage } from './pages/file/PlaceholderPages'
 import Chat from './pages/Chat'
 import { useAuth } from './context/AuthContext'
+import { GlobalWSProvider } from './context/GlobalWSContext'
 
 function App() {
   const { user, isAdmin } = useAuth()
 
   return (
+    <GlobalWSProvider>
     <UploadProvider>
       <UploadProgressPanel />
       <Routes>
@@ -69,6 +71,7 @@ function App() {
         )}
       </Routes>
     </UploadProvider>
+    </GlobalWSProvider>
   )
 }
 

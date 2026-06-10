@@ -98,6 +98,7 @@ func main() {
 	}
 
 	api := router.Group("/v1")
+	api.Use(middleware.UpdateLastSeen(database))
 
 	// auth (認証不要)
 	api.POST("/auth/register", handlers.Register(database))

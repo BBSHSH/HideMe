@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { C, F } from "../theme/tokens";
 import { Icon } from "../components/Icon";
@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { formatBytes, formatRelativeTime } from "../utils/format";
 import CollectionGrid from "../components/file/CollectionGrid";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { useGlobalWS } from "../context/GlobalWSContext";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -43,19 +44,53 @@ function useAllFiles(limit = 6) {
 
 function useMembers() {
   const [members, setMembers] = useState<any[]>([]);
+  const { subscribe } = useGlobalWS();
+
   useEffect(() => {
     fetch(`${BASE_URL}/v1/members`, { headers: { Authorization: `Bearer ${getToken()}` } })
       .then((r) => r.json()).then((d) => setMembers(d?.items ?? [])).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const unsub1 = subscribe("member_online", (msg) => {
+      setMembers((prev) => prev.map((m) => m.id === msg.data?.user_id ? { ...m, online: true } : m));
+    });
+    const unsub2 = subscribe("member_offline", (msg) => {
+      setMembers((prev) => prev.map((m) => m.id === msg.data?.user_id ? { ...m, online: false } : m));
+    });
+    return () => { unsub1(); unsub2(); };
+  }, [subscribe]);
+
   return members;
 }
 
 function useActivity() {
   const [events, setEvents] = useState<any[]>([]);
+  const { subscribe } = useGlobalWS();
+
   useEffect(() => {
     fetch(`${BASE_URL}/v1/activity`, { headers: { Authorization: `Bearer ${getToken()}` } })
       .then((r) => r.json()).then((d) => setEvents(d?.items ?? [])).catch(() => {});
   }, []);
+
+  const pushEvent = useCallback((msg: any) => {
+    const d = msg.data ?? {};
+    setEvents((prev) => [{
+      id: `ws-${Date.now()}`,
+      type: d.type,
+      user_id: d.user_id,
+      username: d.username,
+      avatar: d.avatar,
+      detail: d.detail,
+      created_at: new Date().toISOString(),
+    }, ...prev.slice(0, 29)]);
+  }, []);
+
+  useEffect(() => {
+    const unsub = subscribe("activity", pushEvent);
+    return unsub;
+  }, [subscribe, pushEvent]);
+
   return events;
 }
 

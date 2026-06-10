@@ -9,10 +9,10 @@ import {
   getMessages, postMessage, deleteMessage,
   getDMConversations, openDMConversation, getDMMessages, postDMMessage,
   getUsers, voiceJoin, voiceLeave,
-  openChatWS, sendSignal,
   type Channel, type Message, type DMConversation, type DMMessage,
   type UserItem, type VoiceParticipant,
 } from "../api/chat";
+import { useGlobalWS } from "../context/GlobalWSContext";
 import { useWebRTC, type CallState } from "../hooks/useWebRTC";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
@@ -428,6 +428,7 @@ export default function Chat() {
   const C = useColors();
   const { user, isAdmin } = useAuth();
   const isMobile = useIsMobile();
+  const { subscribe, send: wsSend } = useGlobalWS();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(true);
 
   const [channels,       setChannels]       = useState<Channel[]>([]);
@@ -444,11 +445,10 @@ export default function Chat() {
   const [callPartner,    setCallPartner]    = useState<{ id: string; name: string; avatar?: string } | null>(null);
   const [incomingCall,   setIncomingCall]   = useState<{ callerId: string; callerName: string; callerAvatar?: string; offer: RTCSessionDescriptionInit } | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
-  const wsRef          = useRef<WebSocket | null>(null);
 
   const webrtc = useWebRTC({
     onSignal: (type, targetId, data) => {
-      if (wsRef.current) sendSignal(wsRef.current, type, targetId, data);
+      wsSend({ type, target_id: targetId, data });
     },
     onRemoteStream: (stream) => {
       if (remoteAudioRef.current) {
@@ -476,38 +476,25 @@ export default function Chat() {
     getDMConversations().then((d) => setDmConvs(d.items ?? []));
   }, []);
 
-  // WebSocket
+  // WebSocket（グローバルWSを購読）
   useEffect(() => {
-    const ws = openChatWS((msg) => {
-      switch (msg.type) {
-        case "message":         setChanMsgs((p) => [...p, msg.data]); break;
-        case "dm":              setDmMsgs((p) => [...p, msg.data]);
-                                setDmConvs((p) => p.map((c) => c.id === msg.channel_id
-                                  ? { ...c, last_message: msg.data.content } : c)); break;
-        case "delete":          setChanMsgs((p) => p.filter((m) => m.id !== msg.data?.id)); break;
-        case "channel_created": setChannels((p) => [...p, msg.data]); break;
-        case "channel_deleted": setChannels((p) => p.filter((c) => c.id !== msg.channel_id));
-                                setActive((cur) => cur.kind === "channel" && cur.channel.id === msg.channel_id ? { kind: "none" } : cur); break;
-        case "voice_state":     setVoiceParticipants((p) => ({ ...p, [msg.channel_id]: msg.data ?? [] })); break;
-        // WebRTC シグナリング
-        case "call_invite":
-          setIncomingCall({ callerId: msg.sender_id, callerName: msg.data?.callerName ?? "Unknown",
-            callerAvatar: msg.data?.callerAvatar, offer: msg.data?.offer });
-          break;
-        case "call_accept":    webrtc.handleAnswer(msg.data); break;
-        case "call_reject":    webrtc.endCall(); break;
-        case "call_end":       webrtc.endCall(); break;
-        case "webrtc_offer":
-          setIncomingCall({ callerId: msg.sender_id, callerName: msg.data?.callerName ?? msg.sender_id,
-            callerAvatar: msg.data?.callerAvatar, offer: msg.data });
-          break;
-        case "webrtc_answer":  webrtc.handleAnswer(msg.data); break;
-        case "webrtc_ice":     webrtc.handleIce(msg.data); break;
-      }
-    });
-    wsRef.current = ws;
-    return () => ws.close();
-  }, []);
+    const unsubs = [
+      subscribe("message",         (msg) => setChanMsgs((p) => [...p, msg.data])),
+      subscribe("dm",              (msg) => { setDmMsgs((p) => [...p, msg.data]); setDmConvs((p) => p.map((c) => c.id === msg.channel_id ? { ...c, last_message: msg.data.content } : c)); }),
+      subscribe("delete",          (msg) => setChanMsgs((p) => p.filter((m) => m.id !== msg.data?.id))),
+      subscribe("channel_created", (msg) => setChannels((p) => [...p, msg.data])),
+      subscribe("channel_deleted", (msg) => { setChannels((p) => p.filter((c) => c.id !== msg.channel_id)); setActive((cur) => cur.kind === "channel" && cur.channel.id === msg.channel_id ? { kind: "none" } : cur); }),
+      subscribe("voice_state",     (msg) => setVoiceParticipants((p) => ({ ...p, [msg.channel_id]: msg.data ?? [] }))),
+      subscribe("call_invite",     (msg) => setIncomingCall({ callerId: msg.sender_id, callerName: msg.data?.callerName ?? "Unknown", callerAvatar: msg.data?.callerAvatar, offer: msg.data?.offer })),
+      subscribe("call_accept",     (msg) => webrtc.handleAnswer(msg.data)),
+      subscribe("call_reject",     ()    => webrtc.endCall()),
+      subscribe("call_end",        ()    => webrtc.endCall()),
+      subscribe("webrtc_offer",    (msg) => setIncomingCall({ callerId: msg.sender_id, callerName: msg.data?.callerName ?? msg.sender_id, callerAvatar: msg.data?.callerAvatar, offer: msg.data })),
+      subscribe("webrtc_answer",   (msg) => webrtc.handleAnswer(msg.data)),
+      subscribe("webrtc_ice",      (msg) => webrtc.handleIce(msg.data)),
+    ];
+    return () => unsubs.forEach((u) => u());
+  }, [subscribe]);
 
   // アクティブ変更時にメッセージ取得
   const activeKey = active.kind === "channel" ? active.channel.id : active.kind === "dm" ? active.conv.id : null;
@@ -539,9 +526,7 @@ export default function Chat() {
     // WS 経由で offer を送る（useWebRTC の startCall が内部で webrtc_offer を送る）
     await webrtc.startCall(targetId);
     // call_invite を別途送って相手に通知
-    if (wsRef.current) sendSignal(wsRef.current, "call_invite", targetId, {
-      callerName: user?.username, callerAvatar: user?.avatar,
-    });
+    wsSend({ type: "call_invite", target_id: targetId, data: { callerName: user?.username, callerAvatar: user?.avatar } });
   };
 
   // 着信受諾
@@ -603,7 +588,7 @@ export default function Chat() {
       {incomingCall && (
         <IncomingCallModal callerName={incomingCall.callerName} callerAvatar={incomingCall.callerAvatar}
           onAccept={handleAcceptCall} onReject={() => {
-            if (wsRef.current) sendSignal(wsRef.current, "call_reject", incomingCall.callerId, {});
+            wsSend({ type: "call_reject", target_id: incomingCall.callerId, data: {} });
             setIncomingCall(null);
           }} />
       )}
@@ -611,7 +596,7 @@ export default function Chat() {
         <CallBar state={webrtc.state} partnerName={callPartner.name} partnerAvatar={callPartner.avatar}
           muted={webrtc.muted} onMute={webrtc.toggleMute}
           onEnd={() => {
-            if (wsRef.current && callPartner) sendSignal(wsRef.current, "call_end", callPartner.id, {});
+            if (callPartner) wsSend({ type: "call_end", target_id: callPartner.id, data: {} });
             webrtc.endCall();
           }} />
       )}

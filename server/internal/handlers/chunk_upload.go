@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/BBSHSH/HideMe/server/internal/auth"
+	"github.com/BBSHSH/HideMe/server/internal/chat"
 	"github.com/BBSHSH/HideMe/server/internal/db"
 	"github.com/BBSHSH/HideMe/server/internal/middleware"
 	"github.com/BBSHSH/HideMe/server/internal/progress"
@@ -179,6 +180,9 @@ func MergeAndUpload(store storage.Storage, database *sql.DB, storageType string)
 				uploadNonVideoBackground(store, database, storageType, uploadID, collectionID, userID, fileName, mergedPath)
 			}
 			db.LogActivity(database, "upload", userID, uploaderName, uploaderAvatar, fileName)
+			chat.Global.Broadcast(chat.WSMessage{Type: "activity", Data: map[string]string{
+				"type": "upload", "user_id": userID, "username": uploaderName, "avatar": uploaderAvatar, "detail": fileName,
+			}})
 		}()
 	}
 }
