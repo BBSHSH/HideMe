@@ -543,6 +543,7 @@ func PatchCollectionFile(database *sql.DB, storeFor StoreSelector, storageType s
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_update"})
 			return
 		}
+		go db.LogActivity(database, "edit", cl.UserID, cl.Username, cl.AvatarURL, cf.FileName)
 		c.JSON(http.StatusOK, gin.H{"updated": true})
 	}
 }
@@ -582,6 +583,7 @@ func DeleteCollectionFile(database *sql.DB, storeFor StoreSelector) gin.HandlerF
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_delete_file"})
 			return
 		}
+		go db.LogActivity(database, "delete", cl.UserID, cl.Username, cl.AvatarURL, cf.FileName)
 
 		// ファイルに記録されたストレージで削除
 		store := storeFor(cf.StorageType)

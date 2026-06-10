@@ -41,6 +41,15 @@ function useAllFiles(limit = 6) {
   return files;
 }
 
+function useMembers() {
+  const [members, setMembers] = useState<any[]>([]);
+  useEffect(() => {
+    fetch(`${BASE_URL}/v1/members`, { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then((r) => r.json()).then((d) => setMembers(d?.items ?? [])).catch(() => {});
+  }, []);
+  return members;
+}
+
 function useActivity() {
   const [events, setEvents] = useState<any[]>([]);
   useEffect(() => {
@@ -117,7 +126,6 @@ function fileIcon(name: string) {
 }
 
 function ActivityRow({ event }: { event: any }) {
-  const isLogin = event.type === "login";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 12px" }}>
       {event.avatar ? (
@@ -135,12 +143,15 @@ function ActivityRow({ event }: { event: any }) {
         </p>
         <p style={{ margin: 0, fontSize: 11, color: C.outlineVariant,
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {isLogin ? "ログイン" : `アップロード: ${event.detail}`}
+          {event.detail}
         </p>
       </div>
       <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 4 }}>
-        <Icon name={isLogin ? "login" : "cloud_upload"} size={12}
-          style={{ color: isLogin ? "#4ade80" : C.primary, opacity: 0.8 }} />
+        <Icon
+          name={event.type === "delete" ? "delete" : event.type === "edit" ? "edit" : "cloud_upload"}
+          size={12}
+          style={{ color: event.type === "delete" ? "#f87171" : event.type === "edit" ? "#fbbf24" : C.primary, opacity: 0.8 }}
+        />
         <span style={{ fontSize: 10, color: C.outline }}>
           {formatRelativeTime(event.created_at)}
         </span>
@@ -224,6 +235,7 @@ export default function Dashboard() {
   const recentFiles = useAllFiles(6);
   const { messages: chatMsgs } = useRecentChat();
   const activityEvents = useActivity();
+  const members = useMembers();
   const isMobile = useIsMobile();
 
   const now = new Date();
@@ -294,6 +306,43 @@ export default function Dashboard() {
           {seeAll("/file")}
         </div>
         <CollectionGrid horizontal cardSize="small" />
+      </div>
+
+      {/* ── メンバー ── */}
+      <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+        <p style={sectionLabel}>メンバー</p>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {members.map((m: any) => (
+            <div key={m.id} style={{
+              display: "flex", alignItems: "center", gap: 8,
+              background: "rgba(88,101,242,0.06)", border: "1px solid rgba(88,101,242,0.18)",
+              borderRadius: 10, padding: "6px 10px",
+            }}>
+              <div style={{ position: "relative", flexShrink: 0 }}>
+                {m.avatar ? (
+                  <img src={m.avatar} alt="" style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover" }} />
+                ) : (
+                  <div style={{ width: 28, height: 28, borderRadius: "50%",
+                    background: "rgba(88,101,242,0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Icon name="person" size={14} style={{ color: C.primary }} />
+                  </div>
+                )}
+                <div style={{
+                  position: "absolute", bottom: 0, right: 0,
+                  width: 9, height: 9, borderRadius: "50%",
+                  background: m.online ? "#4ade80" : "#6b7280",
+                  border: "2px solid rgba(13,14,22,0.95)",
+                }} />
+              </div>
+              <div>
+                <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: C.onSurface }}>{m.username}</p>
+                <p style={{ margin: 0, fontSize: 10, color: C.outlineVariant }}>
+                  {m.online ? "オンライン" : m.last_seen_at ? formatRelativeTime(m.last_seen_at) : "未接続"}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* ── ボトム：最近のファイル ＋ チャット ── */}

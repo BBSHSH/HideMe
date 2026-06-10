@@ -171,11 +171,23 @@ func (h *Hub) broadcastVoiceState(channelID string) {
 	})
 }
 
-func (h *Hub) ServeClient(conn *websocket.Conn, userID string) {
+func (h *Hub) IsOnline(userID string) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return len(h.byUserID[userID]) > 0
+}
+
+func (h *Hub) ServeClient(conn *websocket.Conn, userID string, onConnect, onDisconnect func()) {
 	c := &Client{hub: h, conn: conn, send: make(chan []byte, 256), UserID: userID}
 	h.register <- c
+	if onConnect != nil {
+		onConnect()
+	}
 	go c.writePump()
 	c.readPump()
+	if onDisconnect != nil {
+		onDisconnect()
+	}
 }
 
 func (c *Client) readPump() {

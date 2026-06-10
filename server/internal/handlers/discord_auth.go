@@ -168,10 +168,7 @@ func DiscordOAuthCallback(cfg *config.Config, database *sql.DB) gin.HandlerFunc 
 			return
 		}
 
-		// 5. アクティビティ記録
-		go db.LogActivity(database, "login", dbUser.ID, dbUser.Username, avatarURL, "")
-
-		// 6. JWT 発行
+		// 5. JWT 発行
 		jwtToken, err := auth.GenerateDiscordToken(dbUser.ID, dbUser.Username, dbUser.Role, dbUser.DiscordID, avatarURL)
 		if err != nil {
 			log.Printf("[DISCORD] GenerateDiscordToken error: %v", err)

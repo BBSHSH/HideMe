@@ -147,6 +147,8 @@ func migrate(db *sql.DB) error {
 		`ALTER TABLE collection_files ADD COLUMN view_count INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE collection_files ADD COLUMN display_name TEXT`,
 		`ALTER TABLE collections ADD COLUMN genre TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN last_seen_at DATETIME`,
+		`ALTER TABLE discord_users ADD COLUMN last_seen_at DATETIME`,
 	} {
 		if _, err := db.Exec(ddl); err != nil {
 			if !isDuplicateColumn(err) {

@@ -13,6 +13,27 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// GET /v1/members  メンバー一覧（オンライン状態付き）
+func ListMembers(database *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		members, err := db.ListMembers(database)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed"})
+			return
+		}
+		// オンライン状態を付加
+		type MemberWithOnline struct {
+			db.Member
+			Online bool `json:"online"`
+		}
+		result := make([]MemberWithOnline, len(members))
+		for i, m := range members {
+			result[i] = MemberWithOnline{Member: m, Online: chat.Global.IsOnline(m.ID)}
+		}
+		c.JSON(http.StatusOK, gin.H{"items": result})
+	}
+}
+
 // GET /v1/activity  最近のアクティビティ
 func ListActivity(database *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {

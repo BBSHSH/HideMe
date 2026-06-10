@@ -93,7 +93,6 @@ func Login(database *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		go db.LogActivity(database, "login", user.ID, user.Username, "", "")
 		c.JSON(http.StatusOK, gin.H{
 			"token":    token,
 			"user_id":  user.ID,

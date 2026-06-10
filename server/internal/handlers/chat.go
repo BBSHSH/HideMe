@@ -181,7 +181,7 @@ func VoiceLeave() gin.HandlerFunc {
 }
 
 // GET /v1/chat/ws — JWT を ?token= で受け取ってユーザー識別
-func ChatWebSocket() gin.HandlerFunc {
+func ChatWebSocket(database *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// token クエリパラメータで認証
 		userID := "anonymous"
@@ -194,6 +194,10 @@ func ChatWebSocket() gin.HandlerFunc {
 		if err != nil {
 			return
 		}
-		chat.Global.ServeClient(conn, userID)
+		uid := userID
+		chat.Global.ServeClient(conn, uid,
+			func() { db.UpdateLastSeen(database, uid) },
+			func() { db.UpdateLastSeen(database, uid) },
+		)
 	}
 }

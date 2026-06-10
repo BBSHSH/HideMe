@@ -155,6 +155,8 @@ func main() {
 
 	// アクティビティ
 	api.GET("/activity", middleware.RequireAuth(), handlers.ListActivity(database))
+	// メンバー一覧
+	api.GET("/members", middleware.RequireAuth(), handlers.ListMembers(database))
 
 	// users (DM 相手選択用)
 	api.GET("/users", middleware.RequireAuth(), handlers.ListUsers(database))
@@ -166,7 +168,7 @@ func main() {
 	api.POST("/dm/conversations/:id/messages", middleware.RequireAuth(), handlers.PostDMMessage(database))
 
 	// chat
-	api.GET("/chat/ws", handlers.ChatWebSocket())
+	api.GET("/chat/ws", handlers.ChatWebSocket(database))
 	api.GET("/chat/channels", handlers.ListChannels(database))
 	api.POST("/chat/channels", middleware.RequireAuth(), middleware.RequireAdmin(), handlers.CreateChannel(database))
 	api.DELETE("/chat/channels/:id", middleware.RequireAuth(), middleware.RequireAdmin(), handlers.DeleteChannel(database))
