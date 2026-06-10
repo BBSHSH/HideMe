@@ -1,5 +1,5 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
-import { fetchFile, toBlobURL } from "@ffmpeg/util";
+import { fetchFile } from "@ffmpeg/util";
 
 let ffmpegInstance: FFmpeg | null = null;
 let ffmpegLoading: Promise<FFmpeg> | null = null;
@@ -10,11 +10,11 @@ async function getFFmpeg(): Promise<FFmpeg> {
 
   ffmpegLoading = (async () => {
     const ffmpeg = new FFmpeg();
-    // public/ffmpeg/ に配置されているコアファイルを使用
     const base = `${location.origin}/ffmpeg`;
+    // toBlobURL を使わず直接URLを渡す（Cloudflare圧縮対応）
     await ffmpeg.load({
-      coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, "text/javascript"),
-      wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, "application/wasm"),
+      coreURL: `${base}/ffmpeg-core.js`,
+      wasmURL: `${base}/ffmpeg-core.wasm`,
     });
     ffmpegInstance = ffmpeg;
     ffmpegLoading = null;
