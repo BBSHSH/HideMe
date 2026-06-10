@@ -5,7 +5,7 @@ import { C } from "../../theme/tokens";
 
 function phaseLabel(job: UploadJob): string {
   switch (job.phase) {
-    case "webcodecs": return `ブラウザエンコード中... ${Math.round(job.encodingPercent)}%`;
+    case "webcodecs": return `フロント処理中... ${Math.round(job.encodingPercent)}%`;
     case "sending":   return `送信中... ${job.sendPercent}%`;
     case "encoding":  return `エンコード中... ${job.encodingPercent}%`;
     case "nas":       return `保存中... ${job.nasPercent}%`;

@@ -2,6 +2,7 @@ import { createContext, useContext, useRef, useState, useCallback } from "react"
 import type { ReactNode } from "react";
 import { uploadFileInChunks } from "../api/chunkUpload";
 import { encodeWithWebCodecs } from "../utils/webCodecsEncoder";
+import { trimWithFFmpegWasm } from "../utils/ffmpegTrim";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -28,7 +29,7 @@ export interface StartUploadOpts {
   resolution: string;
   fps: number;
   outputName?: string;
-  encoder?: "ffmpeg" | "webcodecs";
+  encoder?: "ffmpeg" | "ffmpeg-trim" | "webcodecs";
 }
 
 interface UploadContextValue {
@@ -63,7 +64,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
     const job: UploadJob = {
       id: uploadId,
       fileName: baseName,
-      phase: encoder === "webcodecs" ? "webcodecs" : "sending",
+      phase: (encoder === "webcodecs" || encoder === "ffmpeg-trim") ? "webcodecs" : "sending",
       sendPercent: 0,
       encodingPercent: 0,
       nasPercent: 0,
@@ -77,6 +78,19 @@ export function UploadProvider({ children }: { children: ReactNode }) {
     (async () => {
       try {
         let uploadFile = renamedFile;
+        let uploadTrimStart = trimStart;
+        let uploadTrimEnd = trimEnd;
+
+        // FFmpeg.wasm でフロントトリム（-c copy・再エンコードなし）
+        if (encoder === "ffmpeg-trim") {
+          const trimmed = await trimWithFFmpegWasm(file, trimStart, trimEnd, (pct) => {
+            updateJob(uploadId, { phase: "webcodecs", encodingPercent: pct });
+          });
+          uploadFile = new File([trimmed], baseName, { type: "video/mp4" });
+          uploadTrimStart = 0;
+          uploadTrimEnd = trimEnd - trimStart;
+          updateJob(uploadId, { phase: "sending", encodingPercent: 100 });
+        }
 
         // ブラウザ側エンコード（MediaRecorder）
         if (encoder === "webcodecs") {
@@ -92,6 +106,8 @@ export function UploadProvider({ children }: { children: ReactNode }) {
           });
           const encodedName = baseName.replace(/\.[^.]+$/, "") + ext;
           uploadFile = new File([blob], encodedName, { type: blob.type });
+          uploadTrimStart = 0;
+          uploadTrimEnd = trimEnd - trimStart;
           updateJob(uploadId, { phase: "sending", encodingPercent: 100 });
         }
 
@@ -100,9 +116,8 @@ export function UploadProvider({ children }: { children: ReactNode }) {
           file: uploadFile,
           collectionId,
           uploadId,
-          // WebCodecs 使用時はトリム・変換済みなのでサーバー側エンコードをスキップ
-          trimStart: encoder === "webcodecs" ? 0 : trimStart,
-          trimEnd: encoder === "webcodecs" ? (trimEnd - trimStart) : trimEnd,
+          trimStart: uploadTrimStart,
+          trimEnd: uploadTrimEnd,
           volume: encoder === "webcodecs" ? 100 : volume,
           resolution: encoder === "webcodecs" ? "original" : resolution,
           fps: encoder === "webcodecs" ? 0 : fps,
@@ -150,10 +165,11 @@ export function UploadProvider({ children }: { children: ReactNode }) {
           clearInterval(pollingTimers.current[uploadId]);
           delete pollingTimers.current[uploadId];
         }
-        updateJob(uploadId, {
-          phase: "error",
-          error: err instanceof Error ? err.message : "エラーが発生しました",
-        });
+        console.error("[UploadContext] error:", err);
+        const msg = err instanceof Error
+          ? err.message
+          : (typeof err === "string" ? err : JSON.stringify(err) || "不明なエラー");
+        updateJob(uploadId, { phase: "error", error: msg });
       }
     })();
 

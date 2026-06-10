@@ -33,6 +33,7 @@ server/storage/
 # ── ffmpeg ────────────────────────────────────────────
 server/ffmpeg/
 /ffmpeg/
+client/public/ffmpeg/*.wasm
 
 # ── Node.js ──────────────────────────────────────────
 node_modules/
