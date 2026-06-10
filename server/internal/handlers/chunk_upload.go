@@ -9,6 +9,7 @@ import (
 	"math"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -35,7 +36,8 @@ func UploadChunk() gin.HandlerFunc {
 		uploadID := c.GetHeader("X-Upload-ID")
 		chunkIndexStr := c.GetHeader("X-Chunk-Index")
 		totalChunksStr := c.GetHeader("X-Total-Chunks")
-		fileName := c.GetHeader("X-File-Name")
+		fileNameRaw := c.GetHeader("X-File-Name")
+		fileName, _ := url.QueryUnescape(fileNameRaw)
 
 		if uploadID == "" || chunkIndexStr == "" || totalChunksStr == "" || fileName == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "missing_headers"})
@@ -80,7 +82,8 @@ func MergeAndUpload(store storage.Storage, database *sql.DB, storageType string)
 	return func(c *gin.Context) {
 		uploadID := c.GetHeader("X-Upload-ID")
 		totalChunksStr := c.GetHeader("X-Total-Chunks")
-		fileName := c.GetHeader("X-File-Name")
+		fileNameRaw := c.GetHeader("X-File-Name")
+		fileName, _ := url.QueryUnescape(fileNameRaw)
 
 		if uploadID == "" || totalChunksStr == "" || fileName == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "missing_headers"})
