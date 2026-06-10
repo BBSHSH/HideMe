@@ -20,14 +20,17 @@ async function getFFmpeg(): Promise<FFmpeg> {
     let patchedCoreURL = coreURL;
     try {
       const res = await fetch(coreURL);
-      if (res.ok) {
+      const ct = res.headers.get("content-type") ?? "";
+      if (res.ok && ct.includes("javascript")) {
         let text = await res.text();
         text = text.replace(/import\.meta\.url/g, JSON.stringify(coreURL));
         const blob = new Blob([text], { type: "text/javascript" });
         patchedCoreURL = URL.createObjectURL(blob);
+      } else {
+        throw new Error(`ffmpeg-core.js が見つかりません (status=${res.status}, content-type=${ct})`);
       }
-    } catch {
-      // フォールバック: 直接 URL を使う
+    } catch (e) {
+      throw new Error(`FFmpeg.wasm のロード失敗: ${e instanceof Error ? e.message : e}\n/ffmpeg/ffmpeg-core.js と ffmpeg-core.wasm がサーバーに存在するか確認してください`);
     }
 
     await ffmpeg.load({
