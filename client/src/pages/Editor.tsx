@@ -5,6 +5,7 @@ import { Icon } from "../components/Icon";
 import { useSettings } from "../context/SettingsContext";
 import { useUpload } from "../context/UploadContext";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { isWebCodecsSupported } from "../utils/webCodecsEncoder";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -51,6 +52,10 @@ export default function Editor() {
   const [volume, setVolume] = useState(() => settings.defaultVolume);
   const [resolution, setResolution] = useState<Resolution>(() => settings.defaultResolution);
   const [fps, setFps] = useState<FPS>(() => settings.defaultFps);
+
+  // エンコーダー選択
+  const webCodecsAvailable = isWebCodecsSupported();
+  const [encoder, setEncoder] = useState<"ffmpeg" | "webcodecs">("ffmpeg");
 
   // ファイル名変更
   const [outputName, setOutputName] = useState(file?.name.replace(/\.[^.]+$/, "") ?? "");
@@ -190,13 +195,13 @@ export default function Editor() {
   const handleUpload = () => {
     if (!file || !collectionId) return;
 
-    // 通知許可リクエスト
-    if (settings.uploadNotification && Notification.permission === "default") {
+    // 通知許可リクエスト（iOS SafariはNotification APIが存在しない）
+    if (settings.uploadNotification && typeof Notification !== "undefined" && Notification.permission === "default") {
       Notification.requestPermission();
     }
 
     // バックグラウンドアップロード開始 → すぐに前の画面に戻る
-    startUpload({ file, collectionId, trimStart, trimEnd, volume, resolution, fps, outputName });
+    startUpload({ file, collectionId, trimStart, trimEnd, volume, resolution, fps, outputName, encoder });
     navigate(-1);
   };
 
@@ -518,6 +523,31 @@ export default function Editor() {
                     </button>
                   ))}
                 </div>
+              </div>
+              {/* エンコーダー */}
+              <div>
+                <p style={{ margin: "0 0 8px", fontSize: 12, color: "#5865F2", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>エンコーダー</p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  {(["ffmpeg", "webcodecs"] as const).map(enc => {
+                    const disabled = enc === "webcodecs" && !webCodecsAvailable;
+                    const active = encoder === enc;
+                    return (
+                      <button key={enc} onClick={() => !disabled && setEncoder(enc)} style={{
+                        padding: "10px 0", borderRadius: 8,
+                        border: `1px solid ${active ? "#5865F2" : "rgba(69,70,85,0.3)"}`,
+                        background: active ? "rgba(88,101,242,0.15)" : "rgba(26,27,35,0.8)",
+                        color: disabled ? "#454655" : active ? "#bec2ff" : C.onSurfaceVariant,
+                        fontSize: 12, fontWeight: 700,
+                        cursor: disabled ? "not-allowed" : "pointer",
+                        display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                      }}>
+                        <span>{enc === "ffmpeg" ? "FFmpeg" : "WebCodecs"}</span>
+                        <span style={{ fontSize: 9, opacity: 0.7 }}>{enc === "ffmpeg" ? "サーバー処理" : disabled ? "非対応" : "ブラウザ処理"}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {encoder === "webcodecs" && <p style={{ margin: "6px 0 0", fontSize: 10, color: "#8f8fa0" }}>ブラウザ内でH.264エンコードします。</p>}
               </div>
             </div>
           )}
@@ -948,6 +978,49 @@ export default function Editor() {
                 </button>
               ))}
             </div>
+          </section>
+
+          {/* ── エンコーダー ── */}
+          <section style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <h3 style={sidebarLabel}>
+              <Icon name="memory" size={16} />
+              エンコーダー
+            </h3>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              {(["ffmpeg", "webcodecs"] as const).map((enc) => {
+                const disabled = enc === "webcodecs" && !webCodecsAvailable;
+                const active = encoder === enc;
+                return (
+                  <button
+                    key={enc}
+                    onClick={() => !disabled && setEncoder(enc)}
+                    title={disabled ? "このブラウザはWebCodecs APIをサポートしていません" : undefined}
+                    style={{
+                      padding: "8px 4px",
+                      borderRadius: 8,
+                      border: `1px solid ${active ? "#5865F2" : "rgba(69,70,85,0.3)"}`,
+                      background: active ? "rgba(88,101,242,0.15)" : "rgba(26,27,35,0.8)",
+                      color: disabled ? "#454655" : active ? "#bec2ff" : C.onSurfaceVariant,
+                      fontSize: 11, fontWeight: 700,
+                      cursor: disabled ? "not-allowed" : "pointer",
+                      transition: "all 0.15s",
+                      display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                    }}
+                  >
+                    <span>{enc === "ffmpeg" ? "FFmpeg" : "WebCodecs"}</span>
+                    <span style={{ fontSize: 9, opacity: 0.7, fontWeight: 400 }}>
+                      {enc === "ffmpeg" ? "サーバー処理" : disabled ? "非対応" : "ブラウザ処理"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            {encoder === "webcodecs" && (
+              <p style={{ margin: 0, fontSize: 10, color: "#8f8fa0", lineHeight: 1.5 }}>
+                ブラウザ内でH.264エンコードします。
+                {volume !== 100 && " ※音量調整はFFmpegモードのみ対応しています。"}
+              </p>
+            )}
           </section>
 
         </div>

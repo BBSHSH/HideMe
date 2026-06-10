@@ -151,12 +151,15 @@ func MergeAndUpload(store storage.Storage, database *sql.DB, storageType string)
 		// 即座に 202 Accepted を返してバックグラウンドで処理
 		c.JSON(http.StatusAccepted, gin.H{"status": "processing", "upload_id": uploadID})
 
+		// クライアント側でエンコード済みの場合はFFmpegをスキップ
+		skipEncode := c.GetHeader("X-Skip-Encode") == "true"
+
 		// バックグラウンドでエンコード・NAS転送
 		go func() {
 			defer os.RemoveAll(dir)
 			defer os.Remove(mergedPath)
 
-			if isVideoFilename(fileName) {
+			if isVideoFilename(fileName) && !skipEncode {
 				processVideoBackground(store, database, storageType, uploadID, collectionID, userID, fileName, mergedPath, trimStart, trimEnd, volumeVal, resolution, fpsVal)
 			} else {
 				uploadNonVideoBackground(store, database, storageType, uploadID, collectionID, userID, fileName, mergedPath)

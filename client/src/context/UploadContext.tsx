@@ -1,10 +1,11 @@
 import { createContext, useContext, useRef, useState, useCallback } from "react";
 import type { ReactNode } from "react";
 import { uploadFileInChunks } from "../api/chunkUpload";
+import { encodeWithWebCodecs } from "../utils/webCodecsEncoder";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
-export type UploadPhase = "sending" | "encoding" | "nas" | "done" | "error";
+export type UploadPhase = "webcodecs" | "sending" | "encoding" | "nas" | "done" | "error";
 
 export interface UploadJob {
   id: string;
@@ -27,6 +28,7 @@ export interface StartUploadOpts {
   resolution: string;
   fps: number;
   outputName?: string;
+  encoder?: "ffmpeg" | "webcodecs";
 }
 
 interface UploadContextValue {
@@ -53,15 +55,15 @@ export function UploadProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const startUpload = useCallback((opts: StartUploadOpts): string => {
-    const { file, collectionId, trimStart, trimEnd, volume, resolution, fps, outputName } = opts;
+    const { file, collectionId, trimStart, trimEnd, volume, resolution, fps, outputName, encoder = "ffmpeg" } = opts;
     const uploadId = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36);
-    const baseName = (outputName?.trim() || file.name.replace(/\.[^.]+$/, "")) + file.name.slice(file.name.lastIndexOf("."));
+    const baseName = (outputName?.trim() || file.name.replace(/\.[^.]+$/, "")) + ".mp4";
     const renamedFile = new File([file], baseName, { type: file.type });
 
     const job: UploadJob = {
       id: uploadId,
       fileName: baseName,
-      phase: "sending",
+      phase: encoder === "webcodecs" ? "webcodecs" : "sending",
       sendPercent: 0,
       encodingPercent: 0,
       nasPercent: 0,
@@ -74,16 +76,36 @@ export function UploadProvider({ children }: { children: ReactNode }) {
     // バックグラウンドでアップロード開始
     (async () => {
       try {
+        let uploadFile = renamedFile;
+
+        // WebCodecs でブラウザ側エンコード
+        if (encoder === "webcodecs") {
+          const encoded = await encodeWithWebCodecs(file, {
+            trimStart,
+            trimEnd,
+            resolution,
+            fps,
+            volume,
+            onProgress: (pct) => {
+              updateJob(uploadId, { phase: "webcodecs", encodingPercent: pct });
+            },
+          });
+          uploadFile = new File([encoded], baseName, { type: "video/mp4" });
+          updateJob(uploadId, { phase: "sending", encodingPercent: 100 });
+        }
+
         // チャンク送信
         const mergeRes = await uploadFileInChunks({
-          file: renamedFile,
+          file: uploadFile,
           collectionId,
           uploadId,
-          trimStart,
-          trimEnd,
-          volume,
-          resolution,
-          fps,
+          // WebCodecs 使用時はトリム・変換済みなのでサーバー側エンコードをスキップ
+          trimStart: encoder === "webcodecs" ? 0 : trimStart,
+          trimEnd: encoder === "webcodecs" ? (trimEnd - trimStart) : trimEnd,
+          volume: encoder === "webcodecs" ? 100 : volume,
+          resolution: encoder === "webcodecs" ? "original" : resolution,
+          fps: encoder === "webcodecs" ? 0 : fps,
+          skipEncode: encoder === "webcodecs",
           onSendProgress: (percent) => {
             updateJob(uploadId, { phase: "sending", sendPercent: percent });
           },

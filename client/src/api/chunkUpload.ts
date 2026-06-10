@@ -15,6 +15,7 @@ interface ChunkUploadOptions {
   volume: number;
   resolution: string;
   fps: number;
+  skipEncode?: boolean;
   onSendProgress: (percent: number) => void;
 }
 
@@ -45,7 +46,7 @@ async function uploadChunk(
 
 // チャンクアップロード：direct_urlが設定されていればCloudflareを経由しない
 export async function uploadFileInChunks(opts: ChunkUploadOptions): Promise<Response> {
-  const { file, collectionId, uploadId, trimStart, trimEnd, volume, resolution, fps, onSendProgress } = opts;
+  const { file, collectionId, uploadId, trimStart, trimEnd, volume, resolution, fps, skipEncode, onSendProgress } = opts;
 
   const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
   const token = getToken();
@@ -92,6 +93,7 @@ export async function uploadFileInChunks(opts: ChunkUploadOptions): Promise<Resp
       "X-Volume": String(volume),
       "X-Resolution": resolution,
       "X-FPS": String(fps),
+      ...(skipEncode ? { "X-Skip-Encode": "true" } : {}),
     },
   });
 
