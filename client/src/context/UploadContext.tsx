@@ -2,7 +2,6 @@ import { createContext, useContext, useRef, useState, useCallback } from "react"
 import type { ReactNode } from "react";
 import { uploadFileInChunks } from "../api/chunkUpload";
 import { encodeWithWebCodecs } from "../utils/webCodecsEncoder";
-import { trimMp4, isMp4 } from "../utils/mp4Trim";
 import { trimWithFFmpegWasm } from "../utils/ffmpegTrim";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
@@ -82,24 +81,14 @@ export function UploadProvider({ children }: { children: ReactNode }) {
         let uploadTrimStart = trimStart;
         let uploadTrimEnd = trimEnd;
 
-        // フロントトリム: MP4 は mp4box.js（WASM不要）、それ以外は FFmpeg.wasm
+        // フロントトリム: FFmpeg.wasm で全形式対応（-c copy、再エンコードなし）
         if (encoder === "ffmpeg-trim") {
-          if (isMp4(file)) {
-            const trimmed = await trimMp4(file, trimStart, trimEnd, (pct) => {
-              updateJob(uploadId, { phase: "webcodecs", encodingPercent: pct });
-            });
-            uploadFile = new File([trimmed], baseName, { type: "video/mp4" });
-            uploadTrimStart = 0;
-            uploadTrimEnd = trimEnd - trimStart;
-          } else {
-            // MP4以外: FFmpeg.wasm でトリム（-c copy、再エンコードなし）
-            const trimmed = await trimWithFFmpegWasm(file, trimStart, trimEnd, (pct) => {
-              updateJob(uploadId, { phase: "webcodecs", encodingPercent: pct });
-            });
-            uploadFile = new File([trimmed], baseName, { type: "video/mp4" });
-            uploadTrimStart = 0;
-            uploadTrimEnd = trimEnd - trimStart;
-          }
+          const trimmed = await trimWithFFmpegWasm(file, trimStart, trimEnd, (pct) => {
+            updateJob(uploadId, { phase: "webcodecs", encodingPercent: pct });
+          });
+          uploadFile = new File([trimmed], baseName, { type: "video/mp4" });
+          uploadTrimStart = 0;
+          uploadTrimEnd = trimEnd - trimStart;
           updateJob(uploadId, { phase: "sending", encodingPercent: 100 });
         }
 
