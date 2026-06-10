@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -17,9 +18,11 @@ func ListUsers(database *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		users, err := db.ListAllUsers(database)
 		if err != nil {
+			log.Printf("[ListUsers] error: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed"})
 			return
 		}
+		log.Printf("[ListUsers] returning %d users", len(users))
 		c.JSON(http.StatusOK, gin.H{"items": users})
 	}
 }

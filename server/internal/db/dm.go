@@ -160,33 +160,31 @@ func CreateDMMessage(db *sql.DB, convID, senderID, senderName, senderAvatar, con
 
 // ListUsers は全ユーザー（パスワード・Discord 両方）を返す
 func ListAllUsers(db *sql.DB) ([]map[string]string, error) {
-	result := []map[string]string{}
-	// 通常ユーザー
-	rows, err := db.Query(`SELECT id, username, '' as avatar FROM users ORDER BY username`)
-	if err != nil {
-		return nil, err
-	}
-	for rows.Next() {
-		var id, name, avatar string
-		rows.Scan(&id, &name, &avatar)
-		result = append(result, map[string]string{"id": id, "username": name, "avatar": avatar})
-	}
-	rows.Close()
-	// Discord ユーザー
-	rows2, err := db.Query(`
-		SELECT id, username,
-		       CASE WHEN discord_id != '' AND avatar != ''
+	rows, err := db.Query(`
+		SELECT id, COALESCE(username,''), '' AS avatar
+		FROM users
+		WHERE COALESCE(username,'') != ''
+		UNION ALL
+		SELECT id,
+		       COALESCE(username,''),
+		       CASE WHEN COALESCE(discord_id,'') != '' AND COALESCE(avatar,'') != ''
 		            THEN 'https://cdn.discordapp.com/avatars/' || discord_id || '/' || avatar || '.png'
 		            ELSE '' END
-		FROM discord_users ORDER BY username`)
+		FROM discord_users
+		WHERE COALESCE(username,'') != ''
+		ORDER BY 2
+	`)
 	if err != nil {
 		return nil, err
 	}
-	for rows2.Next() {
+	defer rows.Close()
+	result := []map[string]string{}
+	for rows.Next() {
 		var id, name, avatar string
-		rows2.Scan(&id, &name, &avatar)
+		if err := rows.Scan(&id, &name, &avatar); err != nil {
+			continue
+		}
 		result = append(result, map[string]string{"id": id, "username": name, "avatar": avatar})
 	}
-	rows2.Close()
-	return result, nil
+	return result, rows.Err()
 }
