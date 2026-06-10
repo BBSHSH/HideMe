@@ -11,31 +11,10 @@ async function getFFmpeg(): Promise<FFmpeg> {
   ffmpegLoading = (async () => {
     const ffmpeg = new FFmpeg();
     const base = `${location.origin}/ffmpeg`;
-    const coreURL = `${base}/ffmpeg-core.js`;
-    const wasmURL = `${base}/ffmpeg-core.wasm`;
-
-    // ffmpeg-core.js は import.meta.url を内部で使用するため
-    // Worker での動的インポートが失敗する。fetch して
-    // import.meta.url を実際の URL 文字列に置換した Blob URL を渡す。
-    let patchedCoreURL = coreURL;
-    try {
-      const res = await fetch(coreURL);
-      const ct = res.headers.get("content-type") ?? "";
-      if (res.ok && ct.includes("javascript")) {
-        let text = await res.text();
-        text = text.replace(/import\.meta\.url/g, JSON.stringify(coreURL));
-        const blob = new Blob([text], { type: "text/javascript" });
-        patchedCoreURL = URL.createObjectURL(blob);
-      } else {
-        throw new Error(`ffmpeg-core.js が見つかりません (status=${res.status}, content-type=${ct})`);
-      }
-    } catch (e) {
-      throw new Error(`FFmpeg.wasm のロード失敗: ${e instanceof Error ? e.message : e}\n/ffmpeg/ffmpeg-core.js と ffmpeg-core.wasm がサーバーに存在するか確認してください`);
-    }
-
+    // UMD版を使う: importScripts() で classic worker に読み込める
     await ffmpeg.load({
-      coreURL: patchedCoreURL,
-      wasmURL,
+      coreURL: `${base}/ffmpeg-core.js`,
+      wasmURL: `${base}/ffmpeg-core.wasm`,
     });
     ffmpegInstance = ffmpeg;
     ffmpegLoading = null;
