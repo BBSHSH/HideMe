@@ -536,7 +536,7 @@ export default function Editor() {
                     const label = enc === "ffmpeg" ? "FFmpeg" : enc === "ffmpeg-trim" ? "高速" : "MediaRec";
                     const sub = enc === "ffmpeg" ? "サーバー処理" : enc === "ffmpeg-trim" ? "MP4トリム" : disabled ? "非対応" : "ブラウザ録画";
                     return (
-                      <button key={enc} onClick={() => !disabled && setEncoder(enc)} style={{
+                      <button key={enc} onClick={() => !disabled && setEncoder(enc as "ffmpeg" | "ffmpeg-trim" | "webcodecs")} style={{
                         padding: "10px 4px", borderRadius: 8,
                         border: `1px solid ${active ? "#5865F2" : "rgba(69,70,85,0.3)"}`,
                         background: active ? "rgba(88,101,242,0.15)" : "rgba(26,27,35,0.8)",
