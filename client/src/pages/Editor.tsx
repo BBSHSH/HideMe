@@ -6,6 +6,7 @@ import { useSettings } from "../context/SettingsContext";
 import { useUpload } from "../context/UploadContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { isWebCodecsSupported } from "../utils/webCodecsEncoder";
+import { isMp4 } from "../utils/mp4Trim";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -55,7 +56,8 @@ export default function Editor() {
 
   // エンコーダー選択
   const webCodecsAvailable = isWebCodecsSupported();
-  const [encoder, setEncoder] = useState<"ffmpeg" | "webcodecs">("ffmpeg");
+  const fileisMp4 = file ? isMp4(file) : false;
+  const [encoder, setEncoder] = useState<"ffmpeg" | "ffmpeg-trim" | "webcodecs">(fileisMp4 ? "ffmpeg-trim" : "ffmpeg");
 
   // ファイル名変更
   const [outputName, setOutputName] = useState(file?.name.replace(/\.[^.]+$/, "") ?? "");
@@ -528,11 +530,11 @@ export default function Editor() {
               <div>
                 <p style={{ margin: "0 0 8px", fontSize: 12, color: "#5865F2", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>エンコーダー</p>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-                  {(["ffmpeg", "webcodecs"] as const).map(enc => {
+                  {(["ffmpeg", ...(fileisMp4 ? ["ffmpeg-trim"] : []), "webcodecs"] as const).map(enc => {
                     const disabled = enc === "webcodecs" && !webCodecsAvailable;
                     const active = encoder === enc;
-                    const label = enc === "ffmpeg" ? "FFmpeg" : "MediaRec";
-                    const sub = enc === "ffmpeg" ? "サーバー処理" : disabled ? "非対応" : "ブラウザ録画";
+                    const label = enc === "ffmpeg" ? "FFmpeg" : enc === "ffmpeg-trim" ? "高速" : "MediaRec";
+                    const sub = enc === "ffmpeg" ? "サーバー処理" : enc === "ffmpeg-trim" ? "MP4トリム" : disabled ? "非対応" : "ブラウザ録画";
                     return (
                       <button key={enc} onClick={() => !disabled && setEncoder(enc)} style={{
                         padding: "10px 4px", borderRadius: 8,
@@ -992,15 +994,15 @@ export default function Editor() {
               エンコーダー
             </h3>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-              {(["ffmpeg", "webcodecs"] as const).map((enc) => {
+              {(["ffmpeg", ...(fileisMp4 ? ["ffmpeg-trim"] : []), "webcodecs"] as const).map((enc) => {
                 const disabled = enc === "webcodecs" && !webCodecsAvailable;
                 const active = encoder === enc;
-                const label = enc === "ffmpeg" ? "FFmpeg" : "MediaRecorder";
-                const sub = enc === "ffmpeg" ? "サーバー処理" : disabled ? "非対応" : "ブラウザ録画";
+                const label = enc === "ffmpeg" ? "FFmpeg" : enc === "ffmpeg-trim" ? "高速(MP4)" : "MediaRecorder";
+                const sub = enc === "ffmpeg" ? "サーバー処理" : enc === "ffmpeg-trim" ? "ブラウザトリム" : disabled ? "非対応" : "ブラウザ録画";
                 return (
                   <button
                     key={enc}
-                    onClick={() => !disabled && setEncoder(enc)}
+                    onClick={() => !disabled && setEncoder(enc as "ffmpeg" | "ffmpeg-trim" | "webcodecs")}
                     title={enc === "webcodecs" && disabled ? "このブラウザはMediaRecorderをサポートしていません" : undefined}
                     style={{
                       padding: "8px 4px",
@@ -1022,6 +1024,7 @@ export default function Editor() {
             </div>
             <p style={{ margin: 0, fontSize: 10, color: "#8f8fa0", lineHeight: 1.5 }}>
               {encoder === "ffmpeg" && "元ファイルをそのまま送信。サーバーでトリム・エンコード。"}
+              {encoder === "ffmpeg-trim" && "MP4をブラウザでトリムして軽くしてから送信（推奨）。"}
               {encoder === "webcodecs" && "ブラウザ内でリアルタイム録画。再生時間と同じ時間がかかります。"}
             </p>
           </section>
