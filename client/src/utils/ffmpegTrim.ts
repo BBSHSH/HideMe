@@ -11,10 +11,28 @@ async function getFFmpeg(): Promise<FFmpeg> {
   ffmpegLoading = (async () => {
     const ffmpeg = new FFmpeg();
     const base = `${location.origin}/ffmpeg`;
-    // toBlobURL を使わず直接URLを渡す（Cloudflare圧縮対応）
+    const coreURL = `${base}/ffmpeg-core.js`;
+    const wasmURL = `${base}/ffmpeg-core.wasm`;
+
+    // ffmpeg-core.js は import.meta.url を内部で使用するため
+    // Worker での動的インポートが失敗する。fetch して
+    // import.meta.url を実際の URL 文字列に置換した Blob URL を渡す。
+    let patchedCoreURL = coreURL;
+    try {
+      const res = await fetch(coreURL);
+      if (res.ok) {
+        let text = await res.text();
+        text = text.replace(/import\.meta\.url/g, JSON.stringify(coreURL));
+        const blob = new Blob([text], { type: "text/javascript" });
+        patchedCoreURL = URL.createObjectURL(blob);
+      }
+    } catch {
+      // フォールバック: 直接 URL を使う
+    }
+
     await ffmpeg.load({
-      coreURL: `${base}/ffmpeg-core.js`,
-      wasmURL: `${base}/ffmpeg-core.wasm`,
+      coreURL: patchedCoreURL,
+      wasmURL,
     });
     ffmpegInstance = ffmpeg;
     ffmpegLoading = null;
