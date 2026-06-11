@@ -30,6 +30,19 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
   return res.json();
 }
 
+export async function apiDelete<T>(path: string): Promise<T> {
+  const token = localStorage.getItem("hideme_auth")
+    ? JSON.parse(localStorage.getItem("hideme_auth")!).token
+    : null;
+
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`${BASE_URL}${path}`, { method: "DELETE", headers });
+  if (!res.ok) throw new Error(`DELETE ${path} failed: ${res.status}`);
+  return res.json();
+}
+
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
   const token = localStorage.getItem("hideme_auth")
     ? JSON.parse(localStorage.getItem("hideme_auth")!).token

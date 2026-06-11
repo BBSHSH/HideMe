@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"bufio"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -12,139 +12,22 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/BBSHSH/HideMe/server/internal/auth"
-	"github.com/BBSHSH/HideMe/server/internal/chat"
 	"github.com/BBSHSH/HideMe/server/internal/db"
 	"github.com/BBSHSH/HideMe/server/internal/middleware"
 	"github.com/BBSHSH/HideMe/server/internal/progress"
+	"github.com/BBSHSH/HideMe/server/internal/service"
 	"github.com/BBSHSH/HideMe/server/internal/storage"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
-func ffmpegPath() string {
-	if p := os.Getenv("FFMPEG_PATH"); p != "" {
-		return p
-	}
-	return "ffmpeg"
-}
-
-func resolutionHeight(s string) int {
-	switch s {
-	case "1080p":
-		return 1080
-	case "480p":
-		return 480
-	case "240p":
-		return 240
-	default:
-		return 720
-	}
-}
-
-// crfForHeight は H.264 の CRF 値を返す (0=最高品質, 51=最高圧縮)
-func crfForHeight(height int) int {
-	switch {
-	case height >= 1080:
-		return 20
-	case height >= 720:
-		return 22
-	case height >= 480:
-		return 24
-	default:
-		return 26
-	}
-}
-
-func getVideoDuration(path string) (float64, error) {
-	ffprobePath := strings.Replace(ffmpegPath(), "ffmpeg", "ffprobe", 1)
-	out, err := exec.Command(ffprobePath,
-		"-v", "error",
-		"-show_entries", "format=duration",
-		"-of", "default=noprint_wrappers=1:nokey=1",
-		path,
-	).Output()
-	if err != nil {
-		return 0, err
-	}
-	return strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
-}
-
-var reOutTime = regexp.MustCompile(`out_time_ms=(\d+)`)
-
-func runFFmpeg(args []string, totalSec float64, onProgress func(float64)) error {
-	allArgs := append([]string{"-progress", "pipe:2", "-nostats"}, args...)
-	cmd := exec.Command(ffmpegPath(), allArgs...)
-	cmd.Stdout = io.Discard
-
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return err
-	}
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("ffmpeg start: %w", err)
-	}
-
-	var stderrBuf strings.Builder
-	scanner := bufio.NewScanner(stderr)
-	for scanner.Scan() {
-		line := scanner.Text()
-		stderrBuf.WriteString(line + "\n")
-		if m := reOutTime.FindStringSubmatch(line); len(m) == 2 {
-			ms, _ := strconv.ParseFloat(m[1], 64)
-			if totalSec > 0 && onProgress != nil {
-				pct := math.Min((ms/1e6)/totalSec*100, 99)
-				onProgress(pct)
-			}
-		}
-	}
-
-	if err := cmd.Wait(); err != nil {
-		log.Printf("[FFMPEG] error output:\n%s", stderrBuf.String())
-		return fmt.Errorf("ffmpeg: %w\n%s", err, stderrBuf.String())
-	}
-	return nil
-}
-
-// buildFFmpegArgs — H.265 (libx265) エンコード引数
-// アスペクト比保持: scale=-2:N で幅を偶数に自動調整
-func buildFFmpegArgs(input, output string, trimStart, trimEnd float64, volume, height, fps int) []string {
-	args := []string{"-y"}
-
-	// -ss を -i の前に置くことでキーフレームへの高速シーク
-	if trimStart > 0.01 {
-		args = append(args, "-ss", fmt.Sprintf("%.3f", trimStart))
-	}
-	args = append(args, "-i", input)
-	if trimEnd > 0.01 && trimEnd > trimStart {
-		args = append(args, "-t", fmt.Sprintf("%.3f", trimEnd-trimStart))
-	}
-
-	args = append(args,
-		"-vf", fmt.Sprintf("scale=-2:%d", height),
-		"-r", strconv.Itoa(fps),
-		"-af", fmt.Sprintf("volume=%.2f", float64(volume)/100.0),
-		"-c:v", "libx264",
-		"-crf", strconv.Itoa(crfForHeight(height)),
-		"-preset", "fast",
-		"-profile:v", "high",
-		"-avoid_negative_ts", "make_zero",
-		"-movflags", "+faststart",
-		"-c:a", "aac",
-		"-b:a", "128k",
-		output,
-	)
-	return args
-}
-
-// SSEUploadProgress — アップロード進捗を SSE でストリーミング
+// SSEUploadProgress streams upload progress via Server-Sent Events.
 func SSEUploadProgress() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		uploadID := c.Param("uploadId")
@@ -179,18 +62,16 @@ func SSEUploadProgress() gin.HandlerFunc {
 	}
 }
 
-// PollUploadProgress はポーリング用の進捗取得エンドポイント
+// PollUploadProgress returns upload progress for polling clients.
 // GET /v1/upload-status/:uploadId
 func PollUploadProgress() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		uploadID := c.Param("uploadId")
 		ev, ok := progress.Global.Latest(uploadID)
 		if !ok {
-			// まだ処理が始まっていない（受信中）→ 200 で waiting を返す
 			c.JSON(http.StatusOK, gin.H{"phase": "waiting"})
 			return
 		}
-		// done/error なら latest をクリア
 		if ev.Phase == progress.PhaseDone || ev.Phase == progress.PhaseError {
 			progress.Global.CleanLatest(uploadID)
 		}
@@ -213,18 +94,7 @@ func ListCollectionFiles(database *sql.DB) gin.HandlerFunc {
 	}
 }
 
-// isVideoFilename はファイル名が動画拡張子かどうかを判定する
-func isVideoFilename(name string) bool {
-	lower := strings.ToLower(name)
-	for _, ext := range []string{".mp4", ".webm", ".mov", ".mkv", ".avi", ".flv", ".wmv"} {
-		if strings.HasSuffix(lower, ext) {
-			return true
-		}
-	}
-	return false
-}
-
-// uploadNonVideo は非動画ファイルをエンコードせずそのままストレージに保存する
+// uploadNonVideo saves a non-video file directly to storage without encoding.
 func uploadNonVideo(c *gin.Context, store storage.Storage, database *sql.DB, collectionID, storageType, userID string, file *multipart.FileHeader) {
 	uploadID := c.GetHeader("X-Upload-ID")
 
@@ -235,7 +105,6 @@ func uploadNonVideo(c *gin.Context, store storage.Storage, database *sql.DB, col
 	}
 	defer src.Close()
 
-	// NAS 転送開始を SSE で通知
 	if uploadID != "" {
 		progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseNAS, Percent: 0})
 	}
@@ -257,7 +126,6 @@ func uploadNonVideo(c *gin.Context, store storage.Storage, database *sql.DB, col
 		return
 	}
 
-	// サムネイル処理
 	thumbnailName := ""
 	if thumb, err := c.FormFile("thumbnail"); err == nil {
 		if ts, err := thumb.Open(); err == nil {
@@ -275,7 +143,6 @@ func uploadNonVideo(c *gin.Context, store storage.Storage, database *sql.DB, col
 		return
 	}
 
-	// NAS 転送完了 + done を SSE で通知
 	if uploadID != "" {
 		progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseNAS, Percent: 100})
 		progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseDone, FileID: cf.ID})
@@ -310,13 +177,11 @@ func UploadToCollection(store storage.Storage, database *sql.DB, storageType str
 			return
 		}
 
-		// 非動画ファイルは ffmpeg をスキップして直接保存
-		if !isVideoFilename(file.Filename) {
+		if !service.IsVideoFilename(file.Filename) {
 			uploadNonVideo(c, store, database, collectionID, storageType, userID, file)
 			return
 		}
 
-		// エンコード設定
 		trimStart, _ := strconv.ParseFloat(c.PostForm("trim_start"), 64)
 		trimEnd, _ := strconv.ParseFloat(c.PostForm("trim_end"), 64)
 		volumeVal, _ := strconv.Atoi(c.PostForm("volume"))
@@ -332,11 +197,7 @@ func UploadToCollection(store storage.Storage, database *sql.DB, storageType str
 			fpsVal = 30
 		}
 
-
-		// 一時ファイルに保存
-		tmpDir := os.TempDir()
-		tmpIn := filepath.Join(tmpDir, "hideme_in_"+uploadID+filepath.Ext(file.Filename))
-
+		tmpIn := filepath.Join(os.TempDir(), "hideme_in_"+uploadID+filepath.Ext(file.Filename))
 		src, err := file.Open()
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_open_file"})
@@ -357,14 +218,13 @@ func UploadToCollection(store storage.Storage, database *sql.DB, storageType str
 		}
 		dst.Close()
 
-		// 202 を返してバックグラウンドで処理
 		c.JSON(http.StatusAccepted, gin.H{"upload_id": uploadID, "status": "processing"})
 
-		go processVideoBackground(store, database, storageType, uploadID, collectionID, userID, file.Filename, tmpIn, trimStart, trimEnd, volumeVal, resolution, fpsVal)
+		go service.ProcessVideoBackground(store, database, storageType, uploadID, collectionID, userID, file.Filename, tmpIn, trimStart, trimEnd, volumeVal, resolution, fpsVal)
 	}
 }
 
-// processVideoFromPath は指定パスの動画ファイルをエンコードしてストレージに保存する（チャンクアップロード用）
+// processVideoFromPath encodes a video from disk path and uploads it (used by chunk upload).
 func processVideoFromPath(c *gin.Context, store storage.Storage, database *sql.DB, storageType, uploadID, fileName, inputPath string, trimStart, trimEnd float64, volumeVal int, resolution string, fpsVal int) {
 	collectionID := c.Param("id")
 
@@ -377,16 +237,16 @@ func processVideoFromPath(c *gin.Context, store storage.Storage, database *sql.D
 	tmpOut := filepath.Join(os.TempDir(), "hideme_out_"+uploadID+".mp4")
 	defer os.Remove(tmpOut)
 
-	totalSec, _ := getVideoDuration(inputPath)
+	totalSec, _ := service.GetVideoDuration(inputPath)
 	if trimEnd > 0.01 && trimEnd > trimStart {
 		totalSec = trimEnd - trimStart
 	}
 
-	height := resolutionHeight(resolution)
-	ffArgs := buildFFmpegArgs(inputPath, tmpOut, trimStart, trimEnd, volumeVal, height, fpsVal)
-	log.Printf("[FFMPEG/CHUNK] start: %s -> %s crf=%d", fileName, resolution, crfForHeight(height))
+	height := service.ResolutionHeight(resolution)
+	ffArgs := service.BuildFFmpegArgs(inputPath, tmpOut, trimStart, trimEnd, volumeVal, height, fpsVal)
+	log.Printf("[FFMPEG/CHUNK] start: %s -> %s crf=%d", fileName, resolution, service.CRFForHeight(height))
 
-	if err := runFFmpeg(ffArgs, totalSec, func(pct float64) {
+	if err := service.RunFFmpeg(ffArgs, totalSec, func(pct float64) {
 		if uploadID != "" {
 			progress.Global.Send(uploadID, progress.Event{Phase: progress.PhaseFFmpeg, Percent: pct})
 		}
@@ -414,7 +274,7 @@ func processVideoFromPath(c *gin.Context, store storage.Storage, database *sql.D
 	outFileName := strings.TrimSuffix(fileName, filepath.Ext(fileName)) + ".mp4"
 
 	item, err := store.UploadWithProgress(
-		c.Request.Context(),
+		context.Background(),
 		outFileName,
 		outFile,
 		outInfo.Size(),
@@ -449,7 +309,7 @@ func processVideoFromPath(c *gin.Context, store storage.Storage, database *sql.D
 	c.JSON(http.StatusOK, cf)
 }
 
-// uploadNonVideoFromReader は io.Reader から非動画ファイルをアップロードする（チャンクアップロード用）
+// uploadNonVideoFromReader uploads a non-video from an io.Reader (used by chunk upload).
 func uploadNonVideoFromReader(c *gin.Context, store storage.Storage, database *sql.DB, collectionID, storageType, uploadID string, fh *multipart.FileHeader, r io.Reader) {
 	claims, _ := c.Get(middleware.ClaimsKey)
 	userID := ""
@@ -485,7 +345,7 @@ func uploadNonVideoFromReader(c *gin.Context, store storage.Storage, database *s
 	c.JSON(http.StatusCreated, cf)
 }
 
-// PatchCollectionFile はファイルのメタデータ（表示名・サムネイル・コレクション）を更新する
+// PatchCollectionFile updates file metadata (display name, thumbnail, collection).
 func PatchCollectionFile(database *sql.DB, storeFor StoreSelector, storageType string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		fileID := c.Param("fileID")
@@ -517,13 +377,11 @@ func PatchCollectionFile(database *sql.DB, storeFor StoreSelector, storageType s
 			newCollectionID = cf.CollectionID
 		}
 		thumbnailName := cf.ThumbnailName
-		// admin のみ uploaded_by を変更可能
 		newUploadedBy := ""
 		if cl.Role == "admin" {
 			newUploadedBy = c.PostForm("uploaded_by")
 		}
 
-		// サムネイル画像が送られてきた場合はアップロード
 		if thumbFile, err := c.FormFile("thumbnail"); err == nil {
 			ts, err := thumbFile.Open()
 			if err == nil {
@@ -531,7 +389,6 @@ func PatchCollectionFile(database *sql.DB, storeFor StoreSelector, storageType s
 				store := storeFor(storageType)
 				thumbPath := "thumbnails/" + uuid.NewString() + filepath.Ext(thumbFile.Filename)
 				if _, err := store.Upload(c.Request.Context(), thumbPath, ts, thumbFile.Size); err == nil {
-					// 旧サムネイルを削除
 					if cf.ThumbnailName != "" {
 						_ = store.Delete(c.Request.Context(), cf.ThumbnailName)
 					}
@@ -544,12 +401,7 @@ func PatchCollectionFile(database *sql.DB, storeFor StoreSelector, storageType s
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_update"})
 			return
 		}
-		go func(uid, uname, uavatar, fname string) {
-			db.LogActivity(database, "edit", uid, uname, uavatar, fname)
-			chat.Global.Broadcast(chat.WSMessage{Type: "activity", Data: map[string]string{
-				"type": "edit", "user_id": uid, "username": uname, "avatar": uavatar, "detail": fname,
-			}})
-		}(cl.UserID, cl.Username, cl.AvatarURL, cf.FileName)
+		go service.BroadcastActivity(database, "edit", cl.UserID, cl.Username, cl.AvatarURL, cf.FileName)
 		c.JSON(http.StatusOK, gin.H{"updated": true})
 	}
 }
@@ -568,8 +420,6 @@ func DeleteCollectionFile(database *sql.DB, storeFor StoreSelector) gin.HandlerF
 			return
 		}
 
-		// アップロード者本人 または admin のみ削除可能
-		// uploaded_by が空のレコード（旧データ）は admin のみ削除可能
 		claims, ok := c.Get(middleware.ClaimsKey)
 		if !ok || claims == nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -589,14 +439,8 @@ func DeleteCollectionFile(database *sql.DB, storeFor StoreSelector) gin.HandlerF
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_delete_file"})
 			return
 		}
-		go func(uid, uname, uavatar, fname string) {
-			db.LogActivity(database, "delete", uid, uname, uavatar, fname)
-			chat.Global.Broadcast(chat.WSMessage{Type: "activity", Data: map[string]string{
-				"type": "delete", "user_id": uid, "username": uname, "avatar": uavatar, "detail": fname,
-			}})
-		}(cl.UserID, cl.Username, cl.AvatarURL, cf.FileName)
+		go service.BroadcastActivity(database, "delete", cl.UserID, cl.Username, cl.AvatarURL, cf.FileName)
 
-		// ファイルに記録されたストレージで削除
 		store := storeFor(cf.StorageType)
 		if err := store.Delete(c.Request.Context(), cf.FileName); err != nil && !errors.Is(err, storage.ErrNotFound) {
 			log.Printf("[WARN] delete file (%s): %v", cf.StorageType, err)

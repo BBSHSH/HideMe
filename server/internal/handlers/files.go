@@ -16,6 +16,8 @@ import (
 	"github.com/google/uuid"
 )
 
+
+
 // StoreSelector は storage_type 文字列から適切なストアを返す関数型
 type StoreSelector func(storageType string) storage.Storage
 
@@ -40,64 +42,12 @@ func ListFiles(store storage.Storage) gin.HandlerFunc {
 	}
 }
 
-type RecentFileItem struct {
-	ID             string `json:"id"`
-	CollectionID   string `json:"collection_id"`
-	CollectionName string `json:"collection_name"`
-	FileName       string `json:"file_name"`
-	DisplayName    string `json:"display_name"`
-	FileSize       int64  `json:"file_size"`
-	ThumbnailName  string `json:"thumbnail_name"`
-	UploadedBy     string `json:"uploaded_by"`
-	UploaderName   string `json:"uploader_name"`
-	UploaderAvatar string `json:"uploader_avatar"`
-	UploadedAt     string `json:"uploaded_at"`
-	ViewCount      int64  `json:"view_count"`
-}
-
 func ListAllFiles(database *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// file_name ごとに最新の1件だけ取得（重複排除）
-		// collection_id が NULL / 空のレコードはコレクションに属さない孤立レコードのため除外
-		rows, err := database.Query(`
-			SELECT cf.id, cf.collection_id, COALESCE(col.name,'') AS collection_name,
-			       cf.file_name, COALESCE(cf.display_name,'') AS display_name, cf.file_size,
-			       COALESCE(cf.thumbnail_name,''),
-			       COALESCE(cf.uploaded_by,''),
-			       COALESCE(u.username, du.username, '') AS uploader_name,
-			       COALESCE(
-			           CASE WHEN du.discord_id != '' AND du.avatar != ''
-			                THEN 'https://cdn.discordapp.com/avatars/' || du.discord_id || '/' || du.avatar || '.png'
-			                ELSE '' END, '') AS uploader_avatar,
-			       cf.uploaded_at,
-			       COALESCE(cf.view_count, 0) AS view_count
-			FROM collection_files cf
-			LEFT JOIN collections     col ON col.id  = cf.collection_id
-			LEFT JOIN users            u  ON u.id   = cf.uploaded_by
-			LEFT JOIN discord_users   du  ON du.id  = cf.uploaded_by
-			WHERE cf.collection_id IS NOT NULL AND cf.collection_id != ''
-			ORDER BY cf.uploaded_at DESC LIMIT 100
-		`)
+		files, err := dbpkg.ListAllFilesJoin(database)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_list_files"})
 			return
-		}
-		defer rows.Close()
-
-		var files []RecentFileItem
-		for rows.Next() {
-			var f RecentFileItem
-			if err := rows.Scan(&f.ID, &f.CollectionID, &f.CollectionName,
-				&f.FileName, &f.DisplayName, &f.FileSize, &f.ThumbnailName,
-				&f.UploadedBy, &f.UploaderName, &f.UploaderAvatar,
-				&f.UploadedAt, &f.ViewCount); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed_to_scan_files"})
-				return
-			}
-			files = append(files, f)
-		}
-		if files == nil {
-			files = []RecentFileItem{}
 		}
 		c.JSON(http.StatusOK, gin.H{"items": files})
 	}

@@ -1,8 +1,11 @@
-import { apiGet, apiPost } from "./client";
+import { apiGet, apiPost, apiPut, apiDelete } from "./client";
 import type { Collection } from "../data/files";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
+function getToken(): string {
+  return JSON.parse(localStorage.getItem("hideme_auth") || "{}").token ?? "";
+}
 
 export type CreateCollectionInput = {
   name: string;
@@ -14,22 +17,13 @@ export type CreateCollectionInput = {
 };
 
 export async function getCollectionFiles(collectionId: string) {
-  const response = await fetch(
-    `${BASE_URL}/v1/collections/${collectionId}/files`
-  );
+  const response = await fetch(`${BASE_URL}/v1/collections/${collectionId}/files`);
   if (!response.ok) throw new Error("Failed to fetch collection files");
-  const data = await response.json();
-  console.log("API Response:", data); // ← ここを確認
-  console.log("Response type:", typeof data);
-  console.log("Is array?", Array.isArray(data));
-  console.log("Keys:", Object.keys(data));
-  return data;
+  return response.json();
 }
 
 export async function getCollectionById(collectionId: string) {
-  const response = await fetch(
-    `${BASE_URL}/v1/collections/${collectionId}`
-  );
+  const response = await fetch(`${BASE_URL}/v1/collections/${collectionId}`);
   if (!response.ok) throw new Error("Failed to fetch collection");
   return response.json();
 }
@@ -40,62 +34,20 @@ export const listCollections = () =>
 export const createCollection = (input: CreateCollectionInput) =>
   apiPost<Collection>("/v1/collections", input);
 
-export const updateCollection = (id: string, input: CreateCollectionInput) => {
-  return fetch(
-    `${import.meta.env.VITE_API_BASE_URL ?? ""}/v1/collections/${id}`,
-    {
-      method: "PUT",  // ← POST から PUT に変更
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${JSON.parse(localStorage.getItem("hideme_auth") || "{}").token}`,
-      },
-      body: JSON.stringify(input),
-    }
-  ).then((res) => {
-    if (!res.ok) throw new Error(`Update failed: ${res.status}`);
-    return res.json() as Promise<{ updated: boolean }>;
-  });
-};
-export const deleteCollection = (id: string) => {
-  return fetch(
-    `${import.meta.env.VITE_API_BASE_URL ?? ""}/v1/collections/${id}`,
-    {
-      method: "DELETE",  // ← POST から DELETE に変更
-      headers: {
-        Authorization: `Bearer ${JSON.parse(localStorage.getItem("hideme_auth") || "{}").token}`,
-      },
-    }
-  ).then((res) => {
-    if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
-    return res.json() as Promise<{ deleted: boolean }>;
-  });
-};
-export const recordView = (collectionId: string, fileId: string): Promise<void> => {
-  return fetch(
-    `${import.meta.env.VITE_API_BASE_URL ?? ""}/v1/collections/${collectionId}/files/${fileId}/view`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${JSON.parse(localStorage.getItem("hideme_auth") || "{}").token}`,
-      },
-    }
-  ).then(() => {});
-};
+export const updateCollection = (id: string, input: CreateCollectionInput) =>
+  apiPut<{ updated: boolean }>(`/v1/collections/${id}`, input);
 
-export const deleteCollectionFile = (collectionId: string, fileId: string): Promise<{ deleted: boolean }> => {
-  return fetch(
-    `${import.meta.env.VITE_API_BASE_URL ?? ""}/v1/collections/${collectionId}/files/${fileId}`,
-    {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${JSON.parse(localStorage.getItem("hideme_auth") || "{}").token}`,
-      },
-    }
-  ).then((res) => {
-    if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
-    return res.json();
-  });
-};
+export const deleteCollection = (id: string) =>
+  apiDelete<{ deleted: boolean }>(`/v1/collections/${id}`);
+
+export const recordView = (collectionId: string, fileId: string): Promise<void> =>
+  fetch(`${BASE_URL}/v1/collections/${collectionId}/files/${fileId}/view`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${getToken()}` },
+  }).then(() => {});
+
+export const deleteCollectionFile = (collectionId: string, fileId: string) =>
+  apiDelete<{ deleted: boolean }>(`/v1/collections/${collectionId}/files/${fileId}`);
 
 export const updateCollectionFile = async (
   collectionId: string,
@@ -109,10 +61,10 @@ export const updateCollectionFile = async (
   if (params.uploadedBy) form.append("uploaded_by", params.uploadedBy);
 
   const res = await fetch(
-    `${import.meta.env.VITE_API_BASE_URL ?? ""}/v1/collections/${collectionId}/files/${fileId}`,
+    `${BASE_URL}/v1/collections/${collectionId}/files/${fileId}`,
     {
       method: "PATCH",
-      headers: { Authorization: `Bearer ${JSON.parse(localStorage.getItem("hideme_auth") || "{}").token}` },
+      headers: { Authorization: `Bearer ${getToken()}` },
       body: form,
     }
   );
@@ -122,22 +74,15 @@ export const updateCollectionFile = async (
 export const uploadCollectionImage = async (file: File): Promise<string> => {
   const form = new FormData();
   form.append("file", file);
-  form.append("folder", "icons");  // icons/ サブフォルダに保存
+  form.append("folder", "icons");
 
-  const response = await fetch(
-    `${import.meta.env.VITE_API_BASE_URL ?? ""}/v1/files/upload`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${JSON.parse(localStorage.getItem("hideme_auth") || "{}").token}`,
-      },
-      body: form,
-    }
-  );
+  const response = await fetch(`${BASE_URL}/v1/files/upload`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${getToken()}` },
+    body: form,
+  });
 
   if (!response.ok) throw new Error("Upload failed");
   const data = await response.json();
-
-  // ファイル名のみ返す（"icons/uuid.ext" 形式）→ CollectionGrid側でURLに変換
   return data.file_name;
 };
