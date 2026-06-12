@@ -4,8 +4,11 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/BBSHSH/HideMe/server/internal/auth"
+	"github.com/BBSHSH/HideMe/server/internal/chat"
 	"github.com/BBSHSH/HideMe/server/internal/db"
 	"github.com/gin-gonic/gin"
 )
@@ -58,6 +61,19 @@ func Register(database *sql.DB) gin.HandlerFunc {
 			"username": user.Username,
 			"role":     user.Role,
 		})
+	}
+}
+
+// ForceLogoutAll は全ユーザーのトークンを無効化し、WS で即時ログアウトを通知する。
+func ForceLogoutAll(database *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ts := strconv.FormatInt(time.Now().Unix(), 10)
+		if err := db.SetAppSetting(database, "force_logout_before", ts); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed"})
+			return
+		}
+		chat.Global.Broadcast(chat.WSMessage{Type: "force_logout", Data: nil})
+		c.JSON(http.StatusOK, gin.H{"ok": true})
 	}
 }
 

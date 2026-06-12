@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { C, F } from "../theme/tokens";
 import { Icon } from "../components/Icon";
-import { getAuthSettings, updateAuthSettings, type AuthSettings } from "../api/auth";
+import { getAuthSettings, updateAuthSettings, forceLogoutAll, type AuthSettings } from "../api/auth";
 
 export default function AdminAuthSettings() {
   const [settings, setSettings] = useState<AuthSettings>({
@@ -12,6 +12,8 @@ export default function AdminAuthSettings() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [forceLoggingOut, setForceLoggingOut] = useState(false);
+  const [forceLogoutDone, setForceLogoutDone] = useState(false);
 
   useEffect(() => {
     getAuthSettings()
@@ -38,6 +40,20 @@ export default function AdminAuthSettings() {
       setError("設定の保存に失敗しました");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleForceLogout = async () => {
+    if (!window.confirm("全ユーザーを強制ログアウトしますか？\n管理者自身も含め全員がログアウトされます。")) return;
+    setForceLoggingOut(true);
+    try {
+      await forceLogoutAll();
+      setForceLogoutDone(true);
+      setTimeout(() => setForceLogoutDone(false), 4000);
+    } catch {
+      setError("強制ログアウトに失敗しました");
+    } finally {
+      setForceLoggingOut(false);
     }
   };
 
@@ -315,6 +331,60 @@ export default function AdminAuthSettings() {
       >
         {saving ? "保存中..." : "設定を保存"}
       </button>
+
+      {/* 強制ログアウトセクション */}
+      <div style={{ borderTop: `1px solid ${C.outlineVariant}22`, paddingTop: 32, display: "flex", flexDirection: "column", gap: 16 }}>
+        <div>
+          <h2 style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 700, color: C.outlineVariant, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+            危険な操作
+          </h2>
+          <p style={{ margin: 0, fontSize: 13, color: C.outlineVariant }}>
+            一度実行すると元に戻せません。慎重に行ってください。
+          </p>
+        </div>
+        <div style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 16, padding: "20px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(239,68,68,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <Icon name="logout" size={22} style={{ color: "#ef4444" }} />
+            </div>
+            <div>
+              <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: C.onSurface, fontFamily: F.family }}>
+                全アカウントを強制ログアウト
+              </p>
+              <p style={{ margin: "2px 0 0", fontSize: 13, color: C.outlineVariant }}>
+                現在ログイン中の全ユーザー（管理者含む）を即時ログアウトします
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleForceLogout}
+            disabled={forceLoggingOut}
+            style={{
+              padding: "10px 20px",
+              borderRadius: 10,
+              border: "1px solid rgba(239,68,68,0.4)",
+              background: "rgba(239,68,68,0.12)",
+              color: "#ef4444",
+              fontWeight: 700,
+              fontSize: 14,
+              fontFamily: F.family,
+              cursor: forceLoggingOut ? "wait" : "pointer",
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+              opacity: forceLoggingOut ? 0.6 : 1,
+              transition: "all 0.2s",
+            }}
+          >
+            {forceLoggingOut ? "処理中..." : "強制ログアウト"}
+          </button>
+        </div>
+        {forceLogoutDone && (
+          <div style={{ background: "rgba(74,222,128,0.1)", border: "1px solid rgba(74,222,128,0.3)", borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+            <Icon name="check_circle" size={18} style={{ color: "#4ade80", flexShrink: 0 }} />
+            <span style={{ fontSize: 13, color: "#4ade80" }}>全ユーザーに強制ログアウトを送信しました</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -99,6 +99,7 @@ func main() {
 
 	api := router.Group("/v1")
 	api.Use(middleware.UpdateLastSeen(database))
+	api.Use(middleware.CheckForceLogout(database))
 
 	// auth (認証不要)
 	api.POST("/auth/register", handlers.Register(database))
@@ -153,6 +154,7 @@ func main() {
 	localStore := storage.NewLocalStorage(cfg.Storage.Local.BaseDir)
 	api.POST("/admin/migrate-storage", middleware.RequireAuth(), middleware.RequireAdmin(), handlers.StartMigration(nasStore, localStore, database))
 	api.GET("/admin/migrate-status", middleware.RequireAuth(), middleware.RequireAdmin(), handlers.GetMigrateStatus())
+	api.POST("/admin/force-logout", middleware.RequireAuth(), middleware.RequireAdmin(), handlers.ForceLogoutAll(database))
 
 	// アクティビティ
 	api.GET("/activity", middleware.RequireAuth(), handlers.ListActivity(database))

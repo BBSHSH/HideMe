@@ -13,7 +13,7 @@ import {
   type UserItem, type VoiceParticipant,
 } from "../api/chat";
 import { useGlobalWS } from "../context/GlobalWSContext";
-import { useWebRTC, type CallState } from "../hooks/useWebRTC";
+import { useCall } from "../context/CallContext";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -173,72 +173,6 @@ function InputBar({ placeholder, onSend }: { placeholder: string; onSend: (t: st
   );
 }
 
-// ─── 通話バー（画面下部に固定表示） ─────────────────────────
-function CallBar({ state, partnerName, partnerAvatar, muted, onMute, onEnd }: {
-  state: CallState; partnerName: string; partnerAvatar?: string;
-  muted: boolean; onMute: () => void; onEnd: () => void;
-}) {
-  if (state === "idle" || state === "ended") return null;
-  const label = state === "calling" ? "発信中..." : state === "ringing" ? "着信中..." : "通話中";
-  return (
-    <div style={{
-      position: "fixed", bottom: 16, left: "50%", transform: "translateX(-50%)",
-      background: state === "connected" ? "#22c55e" : "#f59e0b",
-      borderRadius: 50, padding: "10px 20px", display: "flex", alignItems: "center", gap: 14,
-      boxShadow: "0 8px 32px rgba(0,0,0,0.4)", zIndex: 500,
-    }}>
-      <Avatar username={partnerName} avatar={partnerAvatar} size={30} />
-      <div>
-        <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: "#fff" }}>{partnerName}</p>
-        <p style={{ margin: 0, fontSize: 10, color: "rgba(255,255,255,0.8)" }}>{label}</p>
-      </div>
-      {state === "connected" && (
-        <button onClick={onMute} style={{
-          background: muted ? "rgba(0,0,0,0.3)" : "rgba(255,255,255,0.2)",
-          border: "none", borderRadius: "50%", width: 34, height: 34,
-          cursor: "pointer", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
-        }}><Icon name={muted ? "mic_off" : "mic"} size={16} /></button>
-      )}
-      <button onClick={onEnd} style={{
-        background: "#ef4444", border: "none", borderRadius: "50%",
-        width: 34, height: 34, cursor: "pointer", color: "#fff",
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}><Icon name="call_end" size={16} /></button>
-    </div>
-  );
-}
-
-// ─── 着信モーダル ─────────────────────────────────────────────
-function IncomingCallModal({ callerName, callerAvatar, onAccept, onReject }: {
-  callerName: string; callerAvatar?: string; onAccept: () => void; onReject: () => void;
-}) {
-  const C = useColors();
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
-      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 600 }}>
-      <div style={{ background: C.surfaceContainer, borderRadius: 20, padding: 32,
-        display: "flex", flexDirection: "column", alignItems: "center", gap: 16, width: 280 }}>
-        <div style={{ animation: "pulse 1.5s infinite" }}>
-          <Avatar username={callerName} avatar={callerAvatar} size={64} />
-        </div>
-        <p style={{ margin: 0, fontSize: 18, fontWeight: 800, color: C.onSurface }}>{callerName}</p>
-        <p style={{ margin: 0, fontSize: 13, color: C.outline }}>音声通話の着信...</p>
-        <div style={{ display: "flex", gap: 20, marginTop: 8 }}>
-          <button onClick={onReject} style={{
-            width: 56, height: 56, borderRadius: "50%", border: "none",
-            background: "#ef4444", color: "#fff", cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}><Icon name="call_end" size={24} /></button>
-          <button onClick={onAccept} style={{
-            width: 56, height: 56, borderRadius: "50%", border: "none",
-            background: "#22c55e", color: "#fff", cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}><Icon name="call" size={24} /></button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── 音声チャンネル表示 ──────────────────────────────────────
 function VoiceChannelItem({ ch, isJoined, participants, onClick, onDelete, isAdmin: _isAdmin }: {
@@ -428,7 +362,7 @@ export default function Chat() {
   const C = useColors();
   const { user, isAdmin } = useAuth();
   const isMobile = useIsMobile();
-  const { subscribe, send: wsSend } = useGlobalWS();
+  const { subscribe } = useGlobalWS();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(true);
 
   const [channels,       setChannels]       = useState<Channel[]>([]);
@@ -441,25 +375,7 @@ export default function Chat() {
   const [joinedVoice,    setJoinedVoice]    = useState<string | null>(null); // 参加中の音声チャンネルID
   const [voiceParticipants, setVoiceParticipants] = useState<Record<string, VoiceParticipant[]>>({});
 
-  // WebRTC 通話状態
-  const [callPartner,    setCallPartner]    = useState<{ id: string; name: string; avatar?: string } | null>(null);
-  const [incomingCall,   setIncomingCall]   = useState<{ callerId: string; callerName: string; callerAvatar?: string; offer: RTCSessionDescriptionInit } | null>(null);
-  const remoteAudioRef = useRef<HTMLAudioElement>(null);
-
-  const webrtc = useWebRTC({
-    onSignal: (type, targetId, data) => {
-      wsSend({ type, target_id: targetId, data });
-    },
-    onRemoteStream: (stream) => {
-      if (remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = stream;
-        remoteAudioRef.current.play().catch(() => {});
-      }
-    },
-    onStateChange: (s) => {
-      if (s === "idle" || s === "ended") setCallPartner(null);
-    },
-  });
+  const { handleDMCall } = useCall();
 
   // 初期ロード
   useEffect(() => {
@@ -485,13 +401,6 @@ export default function Chat() {
       subscribe("channel_created", (msg) => setChannels((p) => [...p, msg.data])),
       subscribe("channel_deleted", (msg) => { setChannels((p) => p.filter((c) => c.id !== msg.channel_id)); setActive((cur) => cur.kind === "channel" && cur.channel.id === msg.channel_id ? { kind: "none" } : cur); }),
       subscribe("voice_state",     (msg) => setVoiceParticipants((p) => ({ ...p, [msg.channel_id]: msg.data ?? [] }))),
-      subscribe("call_invite",     (msg) => setIncomingCall({ callerId: msg.sender_id, callerName: msg.data?.callerName ?? "Unknown", callerAvatar: msg.data?.callerAvatar, offer: msg.data?.offer })),
-      subscribe("call_accept",     (msg) => webrtc.handleAnswer(msg.data)),
-      subscribe("call_reject",     ()    => webrtc.endCall()),
-      subscribe("call_end",        ()    => webrtc.endCall()),
-      subscribe("webrtc_offer",    (msg) => setIncomingCall({ callerId: msg.sender_id, callerName: msg.data?.callerName ?? msg.sender_id, callerAvatar: msg.data?.callerAvatar, offer: msg.data })),
-      subscribe("webrtc_answer",   (msg) => webrtc.handleAnswer(msg.data)),
-      subscribe("webrtc_ice",      (msg) => webrtc.handleIce(msg.data)),
     ];
     return () => unsubs.forEach((u) => u());
   }, [subscribe]);
@@ -518,23 +427,6 @@ export default function Chat() {
       await voiceJoin(ch.id);
       setJoinedVoice(ch.id);
     }
-  };
-
-  // DM 通話発信
-  const handleDMCall = async (targetId: string, targetName: string, targetAvatar?: string) => {
-    setCallPartner({ id: targetId, name: targetName, avatar: targetAvatar });
-    // WS 経由で offer を送る（useWebRTC の startCall が内部で webrtc_offer を送る）
-    await webrtc.startCall(targetId);
-    // call_invite を別途送って相手に通知
-    wsSend({ type: "call_invite", target_id: targetId, data: { callerName: user?.username, callerAvatar: user?.avatar } });
-  };
-
-  // 着信受諾
-  const handleAcceptCall = async () => {
-    if (!incomingCall) return;
-    setCallPartner({ id: incomingCall.callerId, name: incomingCall.callerName, avatar: incomingCall.callerAvatar });
-    await webrtc.acceptCall(incomingCall.callerId, incomingCall.offer);
-    setIncomingCall(null);
   };
 
   const sendChannel = useCallback(async (content: string) => {
@@ -570,8 +462,6 @@ export default function Chat() {
     <div style={{ height: isMobile ? "calc(100vh - 56px)" : "calc(100vh - 72px)", display: "flex", overflow: "hidden",
       fontFamily: F.family, background: C.background }}>
 
-      <audio ref={remoteAudioRef} autoPlay />
-
       {showCreateChan && (
         <CreateChannelModal onClose={() => setShowCreateChan(false)}
           onCreate={async (n, d, t) => { await createChannel(n, d, t); setShowCreateChan(false); }} />
@@ -583,21 +473,6 @@ export default function Chat() {
             setDmConvs((p) => p.find((c) => c.id === conv.id) ? p : [conv, ...p]);
             setActive({ kind: "dm", conv });
             setShowNewDM(false);
-          }} />
-      )}
-      {incomingCall && (
-        <IncomingCallModal callerName={incomingCall.callerName} callerAvatar={incomingCall.callerAvatar}
-          onAccept={handleAcceptCall} onReject={() => {
-            wsSend({ type: "call_reject", target_id: incomingCall.callerId, data: {} });
-            setIncomingCall(null);
-          }} />
-      )}
-      {callPartner && (
-        <CallBar state={webrtc.state} partnerName={callPartner.name} partnerAvatar={callPartner.avatar}
-          muted={webrtc.muted} onMute={webrtc.toggleMute}
-          onEnd={() => {
-            if (callPartner) wsSend({ type: "call_end", target_id: callPartner.id, data: {} });
-            webrtc.endCall();
           }} />
       )}
 
@@ -712,7 +587,7 @@ export default function Chat() {
                 )}
               </div>
               {/* DM 通話ボタン */}
-              {active.kind === "dm" && webrtc.state === "idle" && (
+              {active.kind === "dm" && (
                 <button onClick={() => {
                   const p = dmPartner(active.conv);
                   handleDMCall(p.id, p.name, p.avatar);

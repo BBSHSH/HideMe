@@ -2,6 +2,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 import Header from '../components/Header'
 import { useAuth } from '../context/AuthContext'
 import { useIsMobile } from '../hooks/useIsMobile'
+import { CallProvider } from '../context/CallContext'
 
 export default function Layout() {
   const { logout } = useAuth()
@@ -54,9 +55,11 @@ export default function Layout() {
 
       {!hideHeader && <Header onLogout={logout} />}
 
-      <main style={{ paddingTop: hideHeader ? 0 : isMobile ? 56 : 72 }}>
-        <Outlet />
-      </main>
+      <CallProvider>
+        <main style={{ paddingTop: hideHeader ? 0 : isMobile ? 56 : 72 }}>
+          <Outlet />
+        </main>
+      </CallProvider>
     </div>
   )
 }

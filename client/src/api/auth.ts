@@ -1,4 +1,4 @@
-import { apiGet, apiPut } from "./client";
+import { apiGet, apiPost, apiPut } from "./client";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -41,6 +41,9 @@ export const getAuthSettings = () =>
 
 export const updateAuthSettings = (settings: AuthSettings) =>
   apiPut<{ ok: boolean }>("/v1/auth/settings", settings);
+
+export const forceLogoutAll = () =>
+  apiPost<{ ok: boolean }>("/v1/admin/force-logout", {});
 
 /** Discord OAuth の開始 URL を返す (ブラウザリダイレクト用) */
 export const getDiscordLoginURL = () =>

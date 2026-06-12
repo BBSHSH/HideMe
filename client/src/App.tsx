@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect } from 'react'
 import { UploadProvider } from './context/UploadContext'
 import UploadProgressPanel from './components/file/UploadProgressPanel'
 import Layout from './layouts/Layout'
@@ -20,13 +21,24 @@ import VideoAssetsPage from './pages/file/VideoAssetsPage'
 import { RecentPage, FavoritesPage, CleanupPage, ImagesPage, OthersPage } from './pages/file/PlaceholderPages'
 import Chat from './pages/Chat'
 import { useAuth } from './context/AuthContext'
-import { GlobalWSProvider } from './context/GlobalWSContext'
+import { GlobalWSProvider, useGlobalWS } from './context/GlobalWSContext'
+
+// 管理者が全強制ログアウトを実行したとき、WS メッセージを受けて即時ログアウトする
+function ForceLogoutWatcher() {
+  const { subscribe } = useGlobalWS();
+  const { logout } = useAuth();
+  useEffect(() => {
+    return subscribe("force_logout", () => logout());
+  }, [subscribe, logout]);
+  return null;
+}
 
 function App() {
   const { user, isAdmin } = useAuth()
 
   return (
     <GlobalWSProvider>
+    <ForceLogoutWatcher />
     <UploadProvider>
       <UploadProgressPanel />
       <Routes>
