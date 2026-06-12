@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { C, F } from "../theme/tokens";
 import { Icon } from "../components/Icon";
@@ -137,6 +137,8 @@ export default function FileLayout() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showUpload,  setShowUpload]  = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [isDragging,  setIsDragging]  = useState(false);
+  const dragCounter = useRef(0);
 
   // ストレージ使用量
   const [totalSizeB,    setTotalSizeB]    = useState(0);
@@ -157,10 +159,7 @@ export default function FileLayout() {
       .catch(() => {});
   }, []);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    e.target.value = "";
-    if (!f) return;
+  const processFile = useCallback((f: File) => {
     const isVideo = VIDEO_EXTS.some(ext => f.name.toLowerCase().endsWith(ext)) || f.type.startsWith("video/");
     if (isVideo) {
       navigate("/editor", { state: { file: f } });
@@ -168,11 +167,56 @@ export default function FileLayout() {
       setPendingFile(f);
       setShowUpload(true);
     }
+  }, [navigate]);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    processFile(f);
   };
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current += 1;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragging(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current -= 1;
+    if (dragCounter.current === 0) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current = 0;
+    setIsDragging(false);
+    const f = e.dataTransfer.files?.[0];
+    if (!f) return;
+    processFile(f);
+  }, [processFile]);
 
   return (
     <div
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
       style={{
+        position:        "relative",
         display:         "flex",
         flexDirection:   isMobile ? "column" : "row",
         height:          isMobile ? "calc(100vh - 56px)" : "calc(100vh - 72px)",
@@ -183,6 +227,49 @@ export default function FileLayout() {
         color:           C.onSurface,
       }}
     >
+      {/* ドラッグ&ドロップオーバーレイ */}
+      {isDragging && (
+        <div style={{
+          position:       "absolute",
+          inset:          0,
+          zIndex:         9999,
+          display:        "flex",
+          alignItems:     "center",
+          justifyContent: "center",
+          flexDirection:  "column",
+          gap:            16,
+          background:     "rgba(88,101,242,0.12)",
+          border:         "2px dashed rgba(88,101,242,0.6)",
+          borderRadius:   12,
+          backdropFilter: "blur(4px)",
+          pointerEvents:  "none",
+        }}>
+          <div style={{
+            width:          80,
+            height:         80,
+            borderRadius:   "50%",
+            background:     "rgba(88,101,242,0.2)",
+            border:         "2px solid rgba(88,101,242,0.5)",
+            display:        "flex",
+            alignItems:     "center",
+            justifyContent: "center",
+          }}>
+            <span className="material-symbols-outlined" style={{ fontSize: 40, color: "#bec2ff" }}>upload_file</span>
+          </div>
+          <p style={{
+            margin:     0,
+            fontSize:   18,
+            fontWeight: 800,
+            color:      "#bec2ff",
+            fontFamily: F.family,
+          }}>ファイルをドロップしてアップロード</p>
+          <p style={{
+            margin:   0,
+            fontSize: 12,
+            color:    "rgba(190,194,255,0.6)",
+          }}>動画ファイルはエディターで開きます</p>
+        </div>
+      )}
       {/* ── Sidebar (デスクトップ) / 上部タブナビ (モバイル) ── */}
       {isMobile && isShorts ? null : isMobile ? (
         /* モバイル: 上部スクロール可能タブ */

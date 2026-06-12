@@ -78,13 +78,15 @@ func ListFilesByCollectionWithUploader(db *sql.DB, collectionID string) ([]Colle
 			COALESCE(cf.storage_type, 'nas') AS storage_type,
 			COALESCE(cf.uploaded_by, '')     AS uploaded_by,
 			cf.uploaded_at,
-			COALESCE(u.username, du.username, 'Unknown') AS uploader_name,
-			COALESCE(du.avatar, '')                      AS uploader_avatar,
-			COALESCE(du.discord_id, '')                  AS discord_id,
-			COALESCE(cf.view_count, 0)                   AS view_count
+			COALESCE(u.username, du.username, al.username, '') AS uploader_name,
+			COALESCE(du.avatar, '')                            AS uploader_avatar,
+			COALESCE(du.discord_id, '')                        AS discord_id,
+			COALESCE(cf.view_count, 0)                         AS view_count
 		FROM collection_files cf
 		LEFT JOIN users         u  ON u.id  = cf.uploaded_by
 		LEFT JOIN discord_users du ON du.id = cf.uploaded_by
+		LEFT JOIN (SELECT DISTINCT user_id, username FROM activity_log WHERE type = 'upload') al
+		          ON al.user_id = cf.uploaded_by
 		WHERE cf.collection_id = ?
 		ORDER BY cf.uploaded_at DESC
 	`, collectionID)
@@ -208,7 +210,7 @@ func ListAllFilesJoin(db *sql.DB) ([]RecentFileItem, error) {
 		       cf.file_name, COALESCE(cf.display_name,'') AS display_name, cf.file_size,
 		       COALESCE(cf.thumbnail_name,''),
 		       COALESCE(cf.uploaded_by,''),
-		       COALESCE(u.username, du.username, '') AS uploader_name,
+		       COALESCE(u.username, du.username, al.username, '') AS uploader_name,
 		       COALESCE(
 		           CASE WHEN du.discord_id != '' AND du.avatar != ''
 		                THEN 'https://cdn.discordapp.com/avatars/' || du.discord_id || '/' || du.avatar || '.png'
@@ -219,6 +221,8 @@ func ListAllFilesJoin(db *sql.DB) ([]RecentFileItem, error) {
 		LEFT JOIN collections   col ON col.id = cf.collection_id
 		LEFT JOIN users           u ON u.id   = cf.uploaded_by
 		LEFT JOIN discord_users  du ON du.id  = cf.uploaded_by
+		LEFT JOIN (SELECT DISTINCT user_id, username FROM activity_log WHERE type = 'upload') al
+		          ON al.user_id = cf.uploaded_by
 		WHERE cf.collection_id IS NOT NULL AND cf.collection_id != ''
 		ORDER BY cf.uploaded_at DESC LIMIT 100
 	`)
